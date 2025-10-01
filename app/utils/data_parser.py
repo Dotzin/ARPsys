@@ -20,6 +20,7 @@ class DataParser:
                         "cart_id": cart_id,
                         "ad": order["ad"],
                         "sku": order["sku"],
+                        "profit": order["profit"],
                         "title": order["title"],
                         "quantity": order["quantity"],
                         "total_value": order["total_value"],

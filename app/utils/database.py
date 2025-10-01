@@ -66,7 +66,8 @@ class TableCreator:
                 fraction REAL,
                 profitability REAL,
                 rentability REAL,
-                store INTEGER
+                store INTEGER,
+                profit REAL
             )
             """)
             self.db.commit()
