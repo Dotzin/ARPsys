@@ -155,7 +155,7 @@ def relatorio_flex(data_inicio: str = None, data_fim: str = None):
             df.update(df_numeric)
 
             # KPIs gerais
-            lucro_liquido_total = df["gross_profit"].sum() - df["taxes"].sum() - df["freight"].sum() - df["cost"].sum()
+            lucro_liquido_total = df["profit"].sum()
             kpis = {
                 "total_pedidos": len(df),
                 "total_unidades": int(df["quantity"].sum()),
@@ -175,20 +175,20 @@ def relatorio_flex(data_inicio: str = None, data_fim: str = None):
             por_nicho = (df.groupby("nicho")
                          .agg({"order_id": "count", "quantity": "sum", "total_value": "sum",
                                "gross_profit": "sum", "freight": "sum", "taxes": "sum", "cost": "sum",
-                               "rentability": "mean", "profitability": "mean"})
+                               "profit": "sum", "rentability": "mean", "profitability": "mean"})
                          .reset_index()
                          .rename(columns={"order_id": "total_pedidos",
                                           "quantity": "total_unidades",
                                           "total_value": "faturamento_total",
-                                          "gross_profit": "lucro_bruto_total"}))
-            por_nicho["lucro_liquido"] = por_nicho["lucro_bruto_total"] - por_nicho["taxes"] - por_nicho["freight"] - por_nicho["cost"]
+                                          "gross_profit": "lucro_bruto_total",
+                                          "profit": "lucro_liquido"}))
             por_nicho["participacao_faturamento"] = por_nicho["faturamento_total"] / kpis["faturamento_total"] if kpis["faturamento_total"] != 0 else 0
             por_nicho["participacao_lucro"] = por_nicho["lucro_liquido"] / kpis["lucro_liquido_total"] if kpis["lucro_liquido_total"] != 0 else 0
             por_nicho["media_dia_valor"] = por_nicho["faturamento_total"] / dias_totais
             por_nicho["media_dia_unidades"] = por_nicho["total_unidades"] / dias_totais
             por_nicho = limpar_df_para_json(por_nicho)
 
-            # Forecast ML usando lucro líquido
+            # Forecast ML usando lucro líquido (profit)
             df_forecast, conclusoes = predict_sales_for_df(df)
             df_forecast = limpar_df_para_json(df_forecast)
 
@@ -207,6 +207,7 @@ def relatorio_flex(data_inicio: str = None, data_fim: str = None):
     except Exception as e:
         logger.exception("Erro ao gerar relatório flex")
         return JSONResponse(status_code=500, content={"erro": str(e)})
+
 
 # ------------------------------
 # CRUD de SKU/NICHOS com logs

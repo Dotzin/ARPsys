@@ -18,8 +18,8 @@ def extract_features(df: pd.DataFrame) -> pd.DataFrame:
     df["weekday"] = df["payment_date"].dt.weekday
     df["month"] = df["payment_date"].dt.month
 
-    # Criação da coluna lucro_liquido
-    df["lucro_liquido"] = df["gross_profit"] - df["taxes"] - df["freight"] - df["cost"]
+    # Usa a coluna profit do DB
+    df["lucro_liquido"] = df["profit"]
 
     logger.info("Calculando médias por SKU, nicho e loja com lucro_liquido")
     df["sku_avg_profit"] = df.groupby("sku")["lucro_liquido"].transform("mean")
@@ -38,8 +38,8 @@ def train_ml_model(df: pd.DataFrame):
     df_feat = df_feat.sort_values(["sku", "payment_date"])
 
     # Criação do alvo: lucro_liquido do próximo dia
-    df_feat["target_lucro_liquido_next_day"] = df_feat.groupby("sku")["lucro_liquido"].shift(-1)
-    df_train = df_feat.dropna(subset=["target_lucro_liquido_next_day"])
+    df_feat["target_profit_next_day"] = df_feat.groupby("sku")["lucro_liquido"].shift(-1)
+    df_train = df_feat.dropna(subset=["target_profit_next_day"])
     logger.info(f"{len(df_train)} registros disponíveis para treinamento")
 
     features = [
@@ -48,7 +48,7 @@ def train_ml_model(df: pd.DataFrame):
         "weekday", "hour", "month"
     ]
     X = df_train[features]
-    y = df_train["target_lucro_liquido_next_day"]
+    y = df_train["target_profit_next_day"]
 
     model = lgb.LGBMRegressor(n_estimators=1000, learning_rate=0.05, num_leaves=31)
     model.fit(X, y)
@@ -77,13 +77,13 @@ def predict_sales_for_df(df: pd.DataFrame):
         "weekday", "hour", "month"
     ]
     X = df_feat[features]
-    df_feat["forecast_lucro_liquido_next_day"] = model.predict(X)
+    df_feat["forecast_profit_next_day"] = model.predict(X)
     logger.info("Previsão concluída para todos os registros")
 
     conclusions = []
 
     # Nicho
-    top_nichos = df_feat.groupby("nicho")["forecast_lucro_liquido_next_day"].sum().sort_values(ascending=False)
+    top_nichos = df_feat.groupby("nicho")["forecast_profit_next_day"].sum().sort_values(ascending=False)
     if not top_nichos.empty:
         conclusions.append({
             "melhor_nicho_previsto": top_nichos.idxmax(),
@@ -92,7 +92,7 @@ def predict_sales_for_df(df: pd.DataFrame):
         logger.info(f"Melhor nicho previsto: {top_nichos.idxmax()} com lucro {top_nichos.max()}")
 
     # Produto
-    top_produtos = df_feat.groupby("sku")["forecast_lucro_liquido_next_day"].sum().sort_values(ascending=False)
+    top_produtos = df_feat.groupby("sku")["forecast_profit_next_day"].sum().sort_values(ascending=False)
     if not top_produtos.empty:
         conclusions.append({
             "melhor_produto_previsto": top_produtos.idxmax(),
@@ -101,7 +101,7 @@ def predict_sales_for_df(df: pd.DataFrame):
         logger.info(f"Melhor produto previsto: {top_produtos.idxmax()} com lucro {top_produtos.max()}")
 
     # Hora pico
-    peak_hours = df_feat.groupby("hour")["forecast_lucro_liquido_next_day"].sum().sort_values(ascending=False)
+    peak_hours = df_feat.groupby("hour")["forecast_profit_next_day"].sum().sort_values(ascending=False)
     if not peak_hours.empty:
         conclusions.append({
             "hora_pico_prevista": int(peak_hours.idxmax()),
