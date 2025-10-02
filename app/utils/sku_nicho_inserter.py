@@ -25,7 +25,7 @@ class SkuNichoInserter:
             logger.info(f"Inserindo {len(sku_nicho_list)} registros de SKU/nicho")
             values = [(item["sku"], item["nicho"]) for item in sku_nicho_list]
             self.db.cursor.executemany(
-                "INSERT INTO sku_nichos (sku, nicho) VALUES (?, ?)",
+                "INSERT OR IGNORE INTO sku_nichos (sku, nicho) VALUES (?, ?)",
                 values
             )
             self.db.commit()
