@@ -96,6 +96,9 @@ def atualizar_pedidos(data: str = Query(None, description="Data única DD/MM/YYY
 
 # ------------------------------
 # RELATÓRIO FLEX (ML + KPIs + Rankings)
+# ------------------------------
+# ------------------------------
+# RELATÓRIO FLEX (ML + KPIs + Rankings)
 @app.get("/relatorio_flex")
 def relatorio_flex(data_inicio: str = None, data_fim: str = None):
     logger.info(f"Chamada para /relatorio_flex com data_inicio={data_inicio}, data_fim={data_fim}")
@@ -114,100 +117,155 @@ def relatorio_flex(data_inicio: str = None, data_fim: str = None):
         db = app.state.database
         cursor = db.conn.cursor()
 
-        def dividir_periodos(inicio: datetime, fim: datetime):
-            total_dias = (fim - inicio).days + 1
-            periodos = []
-            for i in range(total_dias):
-                d = inicio + timedelta(days=i)
-                periodos.append((d, d))
-            logger.info(f"Períodos divididos: {periodos}")
-            return periodos
+        # 1) Obter todos os dados do período completo
+        query = """ SELECT o.*, n.nicho FROM orders o LEFT JOIN sku_nichos n ON o.sku = n.sku
+                    WHERE date(o.payment_date) BETWEEN ? AND ? """
+        linhas = cursor.execute(query, (start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d"))).fetchall()
+        colunas = [desc[0] for desc in cursor.description]
 
-        periodos = dividir_periodos(start, end)
-        relatorios = []
+        df = pd.DataFrame(linhas, columns=colunas)
+        if df.empty:
+            return {"mensagem": "Nenhum pedido encontrado neste período", "skus_sem_nicho": []}
 
+        df["payment_date"] = pd.to_datetime(df["payment_date"], errors="coerce")
+        dias_totais = (end - start).days + 1
+
+        # Função de limpeza para JSON
         def limpar_df_para_json(df: pd.DataFrame) -> pd.DataFrame:
             return df.fillna(0).replace({pd.NA: 0}).astype(object)
 
-        for p_inicio, p_fim in periodos:
-            logger.info(f"Processando período {p_inicio} a {p_fim}")
-            query = """ SELECT o.*, n.nicho FROM orders o LEFT JOIN sku_nichos n ON o.sku = n.sku
-                        WHERE date(o.payment_date) BETWEEN ? AND ? """
-            linhas = cursor.execute(query, (p_inicio.strftime("%Y-%m-%d"), p_fim.strftime("%Y-%m-%d"))).fetchall()
-            colunas = [desc[0] for desc in cursor.description]
-            logger.info(f"{len(linhas)} pedidos encontrados neste período")
+        # 2) KPIs gerais
+        skus_sem_nicho = df[df["nicho"].isna()]["sku"].unique().tolist()
+        lucro_liquido_total = df["profit"].sum()
+        kpis_gerais = {
+            "lucro_liquido_total": float(lucro_liquido_total),
+            "lucro_bruto_total": float(df["gross_profit"].sum()),
+            "total_pedidos": len(df),
+            "total_unidades": int(df["quantity"].sum()),
+            "faturamento_total": float(df["total_value"].sum()),
+            "custo_total": float(df["cost"].sum()),
+            "frete_total": float(df["freight"].sum()),
+            "impostos_total": float(df["taxes"].sum()),
+            "rentabilidade_media": float(df["rentability"].mean() if not df["rentability"].isna().all() else 0),
+            "profitabilidade_media": float(df["profitability"].mean() if not df["profitability"].isna().all() else 0),
+            "ticket_medio_pedido": float(df["total_value"].sum() / len(df)) if len(df) > 0 else 0,
+            "ticket_medio_unidade": float(df["total_value"].sum() / df["quantity"].sum()) if df["quantity"].sum() > 0 else 0,
+            "skus_sem_nicho": skus_sem_nicho
+        }
 
-            if not linhas:
-                relatorios.append({
-                    "periodo": {"inicio": p_inicio.strftime("%Y-%m-%d"), "fim": p_fim.strftime("%Y-%m-%d")},
-                    "mensagem": "Nenhum pedido encontrado"
-                })
-                continue
+        # 3) Relatórios diários detalhados
+        relatorios_diarios = []
+        relatorios_diarios_por_nicho = []
 
-            df = pd.DataFrame(linhas, columns=colunas)
-            df["payment_date"] = pd.to_datetime(df["payment_date"], errors="coerce")
-            df["dia"] = df["payment_date"].dt.date
-            df["hora"] = df["payment_date"].dt.hour
-            df["dia_semana"] = df["payment_date"].dt.day_name()
-            dias_totais = (p_fim - p_inicio).days + 1
+        for dia, grupo_dia in df.groupby(df["payment_date"].dt.date):
+            total_pedidos = len(grupo_dia)
+            total_unidades = int(grupo_dia["quantity"].sum())
+            faturamento = float(grupo_dia["total_value"].sum())
+            lucro_liquido = float(grupo_dia["profit"].sum())
+            lucro_bruto = float(grupo_dia["gross_profit"].sum())
+            custo = float(grupo_dia["cost"].sum())
+            frete = float(grupo_dia["freight"].sum())
+            impostos = float(grupo_dia["taxes"].sum())
+            rentabilidade_media = float(grupo_dia["rentability"].mean() if not grupo_dia["rentability"].isna().all() else 0)
+            profitabilidade_media = float(grupo_dia["profitability"].mean() if not grupo_dia["profitability"].isna().all() else 0)
+            ticket_medio_pedido = faturamento / total_pedidos if total_pedidos > 0 else 0
+            ticket_medio_unidade = faturamento / total_unidades if total_unidades > 0 else 0
+            skus_sem_nicho_dia = grupo_dia[grupo_dia["nicho"].isna()]["sku"].unique().tolist()
 
-            df_numeric = df.select_dtypes(include='number').fillna(0)
-            df.update(df_numeric)
-
-            # KPIs gerais
-            lucro_liquido_total = df["profit"].sum()
-            kpis = {
-                "total_pedidos": len(df),
-                "total_unidades": int(df["quantity"].sum()),
-                "faturamento_total": float(df["total_value"].sum()),
-                "lucro_bruto_total": float(df["gross_profit"].sum()),
-                "lucro_liquido_total": float(lucro_liquido_total),
-                "custo_total": float(df["cost"].sum()),
-                "frete_total": float(df["freight"].sum()),
-                "impostos_total": float(df["taxes"].sum()),
-                "rentabilidade_media": float(df["rentability"].mean() if not df["rentability"].isna().all() else 0),
-                "profitabilidade_media": float(df["profitability"].mean() if not df["profitability"].isna().all() else 0),
-                "ticket_medio_pedido": float(df["total_value"].sum() / len(df)) if len(df) > 0 else 0,
-                "ticket_medio_unidade": float(df["total_value"].sum() / df["quantity"].sum()) if df["quantity"].sum() > 0 else 0
-            }
-
-            # Agrupar por nicho
-            por_nicho = (df.groupby("nicho")
-                         .agg({"order_id": "count", "quantity": "sum", "total_value": "sum",
-                               "gross_profit": "sum", "freight": "sum", "taxes": "sum", "cost": "sum",
-                               "profit": "sum", "rentability": "mean", "profitability": "mean"})
-                         .reset_index()
-                         .rename(columns={"order_id": "total_pedidos",
-                                          "quantity": "total_unidades",
-                                          "total_value": "faturamento_total",
-                                          "gross_profit": "lucro_bruto_total",
-                                          "profit": "lucro_liquido"}))
-            por_nicho["participacao_faturamento"] = por_nicho["faturamento_total"] / kpis["faturamento_total"] if kpis["faturamento_total"] != 0 else 0
-            por_nicho["participacao_lucro"] = por_nicho["lucro_liquido"] / kpis["lucro_liquido_total"] if kpis["lucro_liquido_total"] != 0 else 0
-            por_nicho["media_dia_valor"] = por_nicho["faturamento_total"] / dias_totais
-            por_nicho["media_dia_unidades"] = por_nicho["total_unidades"] / dias_totais
-            por_nicho = limpar_df_para_json(por_nicho)
-
-            # Forecast ML usando lucro líquido (profit)
-            df_forecast, conclusoes = predict_sales_for_df(df)
-            df_forecast = limpar_df_para_json(df_forecast)
-
-            relatorios.append({
-                "periodo": {"inicio": p_inicio.strftime("%Y-%m-%d"), "fim": p_fim.strftime("%Y-%m-%d")},
-                "kpis_gerais": kpis,
-                "analise_por_nicho": por_nicho.to_dict(orient="records"),
-                "conclusoes_forecast": conclusoes,
-                "forecast": df_forecast.to_dict(orient="records"),
-                "pedidos_brutos": limpar_df_para_json(df).to_dict(orient="records")
+            relatorios_diarios.append({
+                "dia": dia.strftime("%Y-%m-%d") if isinstance(dia, datetime) else str(dia),
+                "lucro_liquido": lucro_liquido,
+                "lucro_bruto": lucro_bruto,
+                "total_pedidos": total_pedidos,
+                "total_unidades": total_unidades,
+                "faturamento": faturamento,
+                "custo": custo,
+                "frete": frete,
+                "impostos": impostos,
+                "rentabilidade_media": rentabilidade_media,
+                "profitabilidade_media": profitabilidade_media,
+                "ticket_medio_pedido": ticket_medio_pedido,
+                "ticket_medio_unidade": ticket_medio_unidade,
+                "skus_sem_nicho": skus_sem_nicho_dia
             })
 
-        logger.info(f"Relatório gerado com {len(relatorios)} blocos")
-        return {"relatorios": relatorios}
+            # Relatório diário por nicho
+            for nicho, grupo_nicho in grupo_dia.groupby("nicho"):
+                total_pedidos_nicho = len(grupo_nicho)
+                total_unidades_nicho = int(grupo_nicho["quantity"].sum())
+                faturamento_nicho = float(grupo_nicho["total_value"].sum())
+                lucro_liquido_nicho = float(grupo_nicho["profit"].sum())
+                lucro_bruto_nicho = float(grupo_nicho["gross_profit"].sum())
+
+                relatorios_diarios_por_nicho.append({
+                    "dia": dia.strftime("%Y-%m-%d") if isinstance(dia, datetime) else str(dia),
+                    "nicho": nicho if nicho else "Sem nicho",
+                    "lucro_liquido": lucro_liquido_nicho,
+                    "lucro_bruto": lucro_bruto_nicho,
+                    "total_pedidos": total_pedidos_nicho,
+                    "total_unidades": total_unidades_nicho,
+                    "faturamento": faturamento_nicho
+                })
+
+        # 4) Análise por nicho geral (lucro na frente)
+        por_nicho = (df.groupby("nicho")
+                     .agg({"profit": "sum", "gross_profit": "sum", "order_id": "count", "quantity": "sum",
+                           "total_value": "sum", "freight": "sum", "taxes": "sum", "cost": "sum",
+                           "rentability": "mean", "profitability": "mean"})
+                     .reset_index()
+                     .rename(columns={"profit": "lucro_liquido",
+                                      "gross_profit": "lucro_bruto",
+                                      "order_id": "total_pedidos",
+                                      "quantity": "total_unidades",
+                                      "total_value": "faturamento_total"}))
+        por_nicho["participacao_faturamento"] = por_nicho["faturamento_total"] / kpis_gerais["faturamento_total"] if kpis_gerais["faturamento_total"] != 0 else 0
+        por_nicho["participacao_lucro"] = por_nicho["lucro_liquido"] / kpis_gerais["lucro_liquido_total"] if kpis_gerais["lucro_liquido_total"] != 0 else 0
+        por_nicho["media_dia_valor"] = por_nicho["faturamento_total"] / dias_totais
+        por_nicho["media_dia_unidades"] = por_nicho["total_unidades"] / dias_totais
+        por_nicho = limpar_df_para_json(por_nicho)
+
+        # 5) Forecast ML
+        df_forecast, conclusoes = predict_sales_for_df(df)
+        df_forecast = limpar_df_para_json(df_forecast)
+
+        # 6) Rankings detalhados com lucro na frente
+        top_30_ads = (df.groupby("ad")
+                         .agg({"profit": "sum", "gross_profit": "sum"})
+                         .sort_values("profit", ascending=False)
+                         .head(30)
+                         .reset_index())
+        top_30_ads = limpar_df_para_json(top_30_ads)
+
+        top_30_skus = (df.groupby("sku")
+                          .agg({"profit": "sum", "gross_profit": "sum"})
+                          .sort_values("profit", ascending=False)
+                          .head(30)
+                          .reset_index())
+        top_30_skus = limpar_df_para_json(top_30_skus)
+
+        top_15_por_nicho = (df.groupby(["nicho", "sku"])
+                               .agg({"profit": "sum", "gross_profit": "sum"})
+                               .sort_values(["nicho", "profit"], ascending=[True, False])
+                               .groupby(level=0).head(15).reset_index())
+        top_15_por_nicho = limpar_df_para_json(top_15_por_nicho)
+
+        logger.info("Relatório flex gerado com sucesso")
+        return {
+            "periodo": {"inicio": start.strftime("%Y-%m-%d"), "fim": end.strftime("%Y-%m-%d")},
+            "kpis_gerais": kpis_gerais,
+            "relatorios_diarios": relatorios_diarios,
+            "relatorios_diarios_por_nicho": relatorios_diarios_por_nicho,
+            "analise_por_nicho": por_nicho.to_dict(orient="records"),
+            "conclusoes_forecast": conclusoes,
+            "forecast": df_forecast.to_dict(orient="records"),
+            "top_30_ads": top_30_ads.to_dict(orient="records"),
+            "top_30_skus": top_30_skus.to_dict(orient="records"),
+            "top_15_por_nicho": top_15_por_nicho.to_dict(orient="records")
+        }
 
     except Exception as e:
         logger.exception("Erro ao gerar relatório flex")
         return JSONResponse(status_code=500, content={"erro": str(e)})
-
 
 # ------------------------------
 # CRUD de SKU/NICHOS com logs
@@ -249,3 +307,60 @@ def listar_sku_nicho():
     rows = app.state.sku_nicho_inserter.list_all()
     logger.info(f"{len(rows)} registros retornados")
     return {"dados": rows}
+
+# ------------------------------
+# ROTA: Listar todos os pedidos
+@app.get("/orders")
+def listar_orders():
+    logger.info("Listando todos os pedidos da tabela orders")
+    try:
+        db = app.state.database
+        cursor = db.conn.cursor()
+        cursor.execute("SELECT * FROM orders")
+        linhas = cursor.fetchall()
+        colunas = [desc[0] for desc in cursor.description]
+
+        df = pd.DataFrame(linhas, columns=colunas)
+        df = df.fillna(0).replace({pd.NA: 0}).astype(object)  # Limpeza básica
+
+        logger.info(f"{len(df)} pedidos encontrados")
+        return {"total_pedidos": len(df), "pedidos": df.to_dict(orient="records")}
+    except Exception as e:
+        logger.exception("Erro ao listar pedidos")
+        return JSONResponse(status_code=500, content={"erro": str(e)})
+# ------------------------------
+# ROTA: Listar pedidos por período
+@app.get("/orders/periodo")
+def listar_orders_periodo(data_inicio: str, data_fim: str):
+    logger.info(f"Listando pedidos entre {data_inicio} e {data_fim}")
+    try:
+        # Validar formato
+        try:
+            inicio = datetime.strptime(data_inicio, "%Y-%m-%d")
+            fim = datetime.strptime(data_fim, "%Y-%m-%d")
+        except ValueError:
+            logger.warning("Datas inválidas fornecidas")
+            return JSONResponse(status_code=400, content={"erro": "Datas inválidas, use formato YYYY-MM-DD"})
+
+        db = app.state.database
+        cursor = db.conn.cursor()
+        query = """
+            SELECT * FROM orders
+            WHERE date(payment_date) BETWEEN ? AND ?
+        """
+        cursor.execute(query, (data_inicio, data_fim))
+        linhas = cursor.fetchall()
+        colunas = [desc[0] for desc in cursor.description]
+
+        df = pd.DataFrame(linhas, columns=colunas)
+        df = df.fillna(0).replace({pd.NA: 0}).astype(object)  # Limpeza básica
+
+        logger.info(f"{len(df)} pedidos encontrados no período")
+        return {
+            "periodo": {"inicio": data_inicio, "fim": data_fim},
+            "total_pedidos": len(df),
+            "pedidos": df.to_dict(orient="records")
+        }
+    except Exception as e:
+        logger.exception("Erro ao listar pedidos por período")
+        return JSONResponse(status_code=500, content={"erro": str(e)})
