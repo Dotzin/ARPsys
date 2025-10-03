@@ -81,7 +81,8 @@ class TableCreator:
             logger.info("Criando tabela 'sku_nichos' se não existir")
             self.db.cursor.execute("""
             CREATE TABLE IF NOT EXISTS sku_nichos (
-                sku TEXT PRIMARY KEY,
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                sku TEXT NOT NULL,
                 nicho TEXT NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )

@@ -11,7 +11,7 @@ class SkuNichoInserter:
         try:
             logger.info(f"Inserindo SKU '{sku}' no nicho '{nicho}'")
             self.db.cursor.execute(
-                "INSERT OR IGNORE INTO sku_nichos (sku, nicho) VALUES (?, ?)",
+                "INSERT INTO sku_nichos (sku, nicho) VALUES (?, ?)",
                 (sku, nicho)
             )
             self.db.commit()
@@ -68,7 +68,7 @@ class SkuNichoInserter:
         try:
             logger.info("Listando todos os SKUs")
             self.db.cursor.execute(
-                "SELECT sku, nicho, created_at FROM sku_nichos"
+                "SELECT id, sku, nicho, created_at FROM sku_nichos"
             )
             rows = self.db.cursor.fetchall()
             logger.info(f"{len(rows)} registros retornados")
