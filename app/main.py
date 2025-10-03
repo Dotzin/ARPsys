@@ -1,5 +1,5 @@
 import logging
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 from utils.get_data import Data
@@ -7,10 +7,12 @@ from utils.data_parser import DataParser
 from utils.database import Database, TableCreator
 from utils.order_inserter import OrderInserter
 from utils.sku_nicho_inserter import SkuNichoInserter
-from utils.ml_utils import predict_sales_for_df
+from utils.ml_utils import predict_sales_for_df 
 import os
 import pandas as pd
 from datetime import datetime, timedelta
+import asyncio
+from typing import List, Dict, Any
 
 # ------------------------------
 # CONFIGURAÇÃO DE LOG
@@ -27,9 +29,168 @@ db_path = os.path.join(BASE_DIR, "database.db")
 logger.info(f"Caminho do banco de dados definido em {db_path}")
 
 # ------------------------------
+# CLASSE PARA GERENCIAR CONEXÕES DE WEBSOCKET
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+        logger.info(f"Nova conexão WebSocket. Total: {len(self.active_connections)}")
+
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.remove(websocket)
+        logger.info(f"Conexão WebSocket encerrada. Total: {len(self.active_connections)}")
+
+    async def send_personal_message(self, message: str, websocket: WebSocket):
+        await websocket.send_json(message)
+
+    async def broadcast(self, message: Dict[str, Any]):
+        # Usa uma cópia da lista para evitar problemas de concorrência se uma
+        # conexão for removida durante o loop (ex: disconnect() chamado)
+        for connection in list(self.active_connections):
+            try:
+                # O payload do relatório já está no formato de dicionário
+                await connection.send_json(message)
+            except RuntimeError as e:
+                # Pode ocorrer se a conexão for fechada logo após a iteração
+                logger.warning(f"Erro ao enviar broadcast para uma conexão: {e}")
+                self.disconnect(connection) # Tenta remover a conexão falha
+            except Exception as e:
+                logger.error(f"Erro inesperado ao enviar broadcast: {e}")
+                self.disconnect(connection) # Tenta remover a conexão falha
+
+
+manager = ConnectionManager()
+# ------------------------------
+# VARIÁVEIS GLOBAIS PARA O RELATÓRIO E A TAREFA
+CURRENT_DAILY_REPORT = None
+UPDATE_INTERVAL_SECONDS = 300  # 5 minutos
+
+# ------------------------------
+# FUNÇÃO PARA CALCULAR O RELATÓRIO DIÁRIO (Simplificado)
+def get_daily_report_data(database: Database) -> Dict[str, Any] | None:
+    """Calcula e retorna apenas o relatório do dia atual."""
+    hoje = datetime.today().strftime("%Y-%m-%d")
+    logger.info(f"Calculando relatório diário para {hoje}")
+
+    # Este é um trecho SIMPLIFICADO do seu /relatorio_flex, focado no dia atual
+    try:
+        db = database
+        cursor = db.conn.cursor()
+
+        query = """ SELECT o.*, n.nicho FROM orders o LEFT JOIN sku_nichos n ON o.sku = n.sku
+                    WHERE date(o.payment_date) = ? """
+        linhas = cursor.execute(query, (hoje,)).fetchall()
+        colunas = [desc[0] for desc in cursor.description]
+
+        df = pd.DataFrame(linhas, columns=colunas)
+        if df.empty:
+            logger.info("Nenhum pedido encontrado para o relatório diário")
+            return {"dia": hoje, "status": "sem_dados", "kpis_diarios": {}}
+
+        # Geração dos KPIs para o dia atual (Adaptado da seção 3 do seu /relatorio_flex)
+        total_pedidos = len(df)
+        total_unidades = int(df["quantity"].sum())
+        faturamento = float(df["total_value"].sum())
+        lucro_liquido = float(df["profit"].sum())
+        
+        # ... (Outros cálculos de KPI)
+
+        kpis_diarios = {
+            "lucro_liquido": lucro_liquido,
+            "faturamento": faturamento,
+            "total_pedidos": total_pedidos,
+            "total_unidades": total_unidades,
+            # Adicione outros KPIs relevantes aqui
+        }
+
+        # Análise por nicho do dia
+        por_nicho_dia = (df.groupby("nicho")
+                             .agg({"profit": "sum", "total_value": "sum", "order_id": "count"})
+                             .reset_index()
+                             .rename(columns={"profit": "lucro_liquido", "total_value": "faturamento", "order_id": "total_pedidos"}))
+        
+        # Limpeza e conversão para JSON (usando a mesma lógica de limpeza)
+        def limpar_df_para_json(df: pd.DataFrame) -> pd.DataFrame:
+             # Aplica limpeza para NaN/NA e converte para object para evitar problemas de serialização
+            return df.fillna(0).replace({pd.NA: 0}).astype(object) 
+        
+        por_nicho_dia = limpar_df_para_json(por_nicho_dia)
+
+        relatorio_final = {
+            "dia": hoje,
+            "status": "sucesso",
+            "kpis_diarios": kpis_diarios,
+            "analise_por_nicho_dia": por_nicho_dia.to_dict(orient="records"),
+            "timestamp_atualizacao": datetime.now().isoformat()
+        }
+        
+        return relatorio_final
+
+    except Exception as e:
+        logger.exception("Erro ao calcular o relatório diário")
+        return {"dia": hoje, "status": "erro", "erro": str(e), "kpis_diarios": {}}
+
+# ------------------------------
+# TAREFA ASSÍNCRONA DE ATUALIZAÇÃO E BROADCAST
+async def periodic_update_and_broadcast(app: FastAPI):
+    global CURRENT_DAILY_REPORT
+    
+    logger.info("Iniciando tarefa periódica de atualização e broadcast")
+    
+    # Configurações para a rota /atualizar_pedidos (para o dia atual)
+    data_inicio = data_fim = datetime.today().strftime("%Y-%m-%d")
+    url = f'https://app.arpcommerce.com.br/sells?r={data_inicio}'
+    # ATENÇÃO: Token de sessão estático. Em produção, use um método seguro e dinâmico.
+    headers = {'session': '.eJwVir0KwjAURt_l0rGU5j_tpLg4Oam4leR6UwqmLUnrIr678YMDh8P3gWGlFN1M8wb9lnaqgaKbXtCDS-uhgEuMlJCaIo1PUMOeKQ2Zcp6Wufx0-1_1OB2v7zHfs7-o8y3KqkQUilsflO245UFoRYS2C8wK9ZSuVYZ59Fy2xmjjAyomrDaSDDpkAr4_KMQwig.aMxLsg.3D5e5s_a96H1mPB_uHM7CySJ7n8'}
+
+    while True:
+        try:
+            logger.info("Executando ciclo de atualização: obtendo pedidos...")
+            # 1. Atualizar Pedidos (Chamada à API externa e inserção no DB)
+            try:
+                data_obj = Data(url, headers)
+                raw_json = data_obj.get_data()
+                logger.info(f"Dados brutos obtidos: {len(raw_json)} registros")
+
+                parser = DataParser(raw_json)
+                pedidos = parser.parse_orders()
+                
+                # Inserção no banco de dados
+                app.state.order_inserter.insert_orders(pedidos)
+                logger.info(f"Ciclo de atualização: {len(pedidos)} pedidos inseridos/atualizados no DB.")
+            except Exception as e:
+                logger.error(f"Falha na atualização de pedidos da API externa: {e}")
+                # Continua para o cálculo do relatório, que pode usar dados antigos
+
+            # 2. Calcular o Relatório Diário
+            relatorio = get_daily_report_data(app.state.database)
+            
+            # 3. Armazenar e fazer Broadcast
+            # Somente faz broadcast se houver um relatório VÁLIDO e se ele for diferente do anterior
+            if relatorio and relatorio.get("status") == "sucesso" and relatorio != CURRENT_DAILY_REPORT:
+                CURRENT_DAILY_REPORT = relatorio
+                await manager.broadcast({"tipo": "relatorio_diario", "dados": relatorio})
+                logger.info("Novo relatório diário calculado e transmitido via WebSocket.")
+            elif relatorio and relatorio.get("status") == "sucesso":
+                logger.info("Relatório diário calculado, mas sem alterações desde a última verificação. Sem broadcast.")
+            else:
+                logger.warning("Relatório diário não pôde ser calculado (sem dados ou erro).")
+
+
+        except Exception as e:
+            logger.exception("Erro fatal na tarefa periódica de atualização e broadcast")
+        
+        # 4. Esperar o próximo ciclo
+        await asyncio.sleep(UPDATE_INTERVAL_SECONDS)
+
+# ------------------------------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Iniciando lifespan do FastAPI")
+    # --- Configuração do DB e Inserters (código original) ---
     database = Database(db_path)
     database.connect()
     logger.info("Database conectada")
@@ -45,16 +206,36 @@ async def lifespan(app: FastAPI):
     app.state.order_inserter = OrderInserter(database)
     app.state.sku_nicho_inserter = SkuNichoInserter(database)
     logger.info("Inserters inicializados")
-
+    
+    # --- Início da Tarefa Periódica ---
+    # Calcular o relatório inicial antes de aceitar conexões
+    global CURRENT_DAILY_REPORT
+    CURRENT_DAILY_REPORT = get_daily_report_data(database)
+    logger.info("Relatório inicial calculado.")
+    
+    # Cria a tarefa assíncrona que rodará em loop
+    # O app.state.background_task garante que a tarefa não seja pega pelo garbage collector
+    app.state.background_task = asyncio.create_task(periodic_update_and_broadcast(app))
+    logger.info("Tarefa de atualização periódica iniciada.")
+    
     yield
+    
+    # --- Shutdown (código original + cancelamento da tarefa) ---
+    app.state.background_task.cancel()
+    try:
+        await app.state.background_task
+    except asyncio.CancelledError:
+        logger.info("Tarefa de atualização periódica cancelada com sucesso.")
+    
     database.close()
     logger.info("Database desconectada e lifespan finalizado")
 
 
 app = FastAPI(lifespan=lifespan)
 
+
 # ------------------------------
-# ROTA: Atualiza pedidos da API
+# ROTA: Atualiza pedidos da API (Com Broadcast)
 @app.post("/atualizar_pedidos")
 def atualizar_pedidos(data: str = Query(None, description="Data única DD/MM/YYYY ou intervalo DD/MM/YYYY/DD/MM/YYYY")):
     logger.info(f"Chamada para /atualizar_pedidos com data={data}")
@@ -77,6 +258,7 @@ def atualizar_pedidos(data: str = Query(None, description="Data única DD/MM/YYY
         url = f'https://app.arpcommerce.com.br/sells?r={data_inicio}' if data_inicio == data_fim else f'https://app.arpcommerce.com.br/sells?r={data_inicio}/{data_fim}'
         logger.info(f"URL gerada para API externa: {url}")
 
+        # ATENÇÃO: Credenciais estáticas, use variáveis de ambiente em produção
         data_obj = Data(url, {'session': '.eJwVir0KwjAURt_l0rGU5j_tpLg4Oam4leR6UwqmLUnrIr678YMDh8P3gWGlFN1M8wb9lnaqgaKbXtCDS-uhgEuMlJCaIo1PUMOeKQ2Zcp6Wufx0-1_1OB2v7zHfs7-o8y3KqkQUilsflO245UFoRYS2C8wK9ZSuVYZ59Fy2xmjjAyomrDaSDDpkAr4_KMQwig.aMxLsg.3D5e5s_a96H1mPB_uHM7CySJ7n8'})
         raw_json = data_obj.get_data()
         logger.info(f"Dados brutos obtidos: {len(raw_json)} registros")
@@ -87,18 +269,50 @@ def atualizar_pedidos(data: str = Query(None, description="Data única DD/MM/YYY
 
         app.state.order_inserter.insert_orders(pedidos)
         logger.info(f"{len(pedidos)} pedidos inseridos no DB com sucesso")
+        
+        # --- ATUALIZAÇÃO MANUAL APÓS REQUISIÇÃO ---
+        # Recalcula o relatório e faz broadcast após uma atualização manual
+        global CURRENT_DAILY_REPORT
+        novo_relatorio = get_daily_report_data(app.state.database)
+        if novo_relatorio and novo_relatorio.get("status") == "sucesso" and novo_relatorio != CURRENT_DAILY_REPORT:
+            CURRENT_DAILY_REPORT = novo_relatorio
+            # Cria uma task para o broadcast para não bloquear a resposta HTTP
+            asyncio.create_task(manager.broadcast({"tipo": "relatorio_diario", "dados": novo_relatorio}))
+            logger.info("Broadcast após atualização manual da API.")
+        
+        # ----------------------------------------------------
+        
         return {"mensagem": f"{len(pedidos)} pedidos atualizados com sucesso.", "data_inicio": data_inicio, "data_fim": data_fim}
 
     except Exception as e:
         logger.exception("Erro ao atualizar pedidos")
         return JSONResponse(status_code=500, content={"erro": str(e)})
 
+# ------------------------------
+# ROTA WEBSOCKET: Relatório Diário em Tempo Real
+@app.websocket("/ws/relatorio_diario")
+async def websocket_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        # Envia o relatório atual imediatamente após a conexão
+        if CURRENT_DAILY_REPORT and CURRENT_DAILY_REPORT.get("status") == "sucesso":
+            await websocket.send_json({"tipo": "relatorio_diario_inicial", "dados": CURRENT_DAILY_REPORT})
+            logger.info("Relatório inicial enviado para o novo cliente WebSocket.")
+
+        # Mantém a conexão aberta esperando por mensagens (ou apenas para receber o broadcast)
+        while True:
+            # Apenas espera (pode receber pings/pongs ou mensagens do cliente, se necessário)
+            await websocket.receive_text()
+            
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+    except Exception as e:
+        logger.error(f"Erro inesperado no WebSocket: {e}")
+        manager.disconnect(websocket)
 
 # ------------------------------
 # RELATÓRIO FLEX (ML + KPIs + Rankings)
 # ------------------------------
-# ------------------------------
-# RELATÓRIO FLEX (ML + KPIs + Rankings)
 @app.get("/relatorio_flex")
 def relatorio_flex(data_inicio: str = None, data_fim: str = None):
     logger.info(f"Chamada para /relatorio_flex com data_inicio={data_inicio}, data_fim={data_fim}")
@@ -209,15 +423,15 @@ def relatorio_flex(data_inicio: str = None, data_fim: str = None):
 
         # 4) Análise por nicho geral (lucro na frente)
         por_nicho = (df.groupby("nicho")
-                     .agg({"profit": "sum", "gross_profit": "sum", "order_id": "count", "quantity": "sum",
-                           "total_value": "sum", "freight": "sum", "taxes": "sum", "cost": "sum",
-                           "rentability": "mean", "profitability": "mean"})
-                     .reset_index()
-                     .rename(columns={"profit": "lucro_liquido",
-                                      "gross_profit": "lucro_bruto",
-                                      "order_id": "total_pedidos",
-                                      "quantity": "total_unidades",
-                                      "total_value": "faturamento_total"}))
+                         .agg({"profit": "sum", "gross_profit": "sum", "order_id": "count", "quantity": "sum",
+                               "total_value": "sum", "freight": "sum", "taxes": "sum", "cost": "sum",
+                               "rentability": "mean", "profitability": "mean"})
+                         .reset_index()
+                         .rename(columns={"profit": "lucro_liquido",
+                                          "gross_profit": "lucro_bruto",
+                                          "order_id": "total_pedidos",
+                                          "quantity": "total_unidades",
+                                          "total_value": "faturamento_total"}))
         por_nicho["participacao_faturamento"] = por_nicho["faturamento_total"] / kpis_gerais["faturamento_total"] if kpis_gerais["faturamento_total"] != 0 else 0
         por_nicho["participacao_lucro"] = por_nicho["lucro_liquido"] / kpis_gerais["lucro_liquido_total"] if kpis_gerais["lucro_liquido_total"] != 0 else 0
         por_nicho["media_dia_valor"] = por_nicho["faturamento_total"] / dias_totais
@@ -225,22 +439,23 @@ def relatorio_flex(data_inicio: str = None, data_fim: str = None):
         por_nicho = limpar_df_para_json(por_nicho)
 
         # 5) Forecast ML
+        # NOTA: Assumindo que predict_sales_for_df retorna (df_com_forecast, conclusoes_dict)
         df_forecast, conclusoes = predict_sales_for_df(df)
         df_forecast = limpar_df_para_json(df_forecast)
 
         # 6) Rankings detalhados com lucro na frente
         top_30_ads = (df.groupby("ad")
-                         .agg({"profit": "sum", "gross_profit": "sum"})
-                         .sort_values("profit", ascending=False)
-                         .head(30)
-                         .reset_index())
+                             .agg({"profit": "sum", "gross_profit": "sum"})
+                             .sort_values("profit", ascending=False)
+                             .head(30)
+                             .reset_index())
         top_30_ads = limpar_df_para_json(top_30_ads)
 
         top_30_skus = (df.groupby("sku")
-                          .agg({"profit": "sum", "gross_profit": "sum"})
-                          .sort_values("profit", ascending=False)
-                          .head(30)
-                          .reset_index())
+                              .agg({"profit": "sum", "gross_profit": "sum"})
+                              .sort_values("profit", ascending=False)
+                              .head(30)
+                              .reset_index())
         top_30_skus = limpar_df_para_json(top_30_skus)
 
         top_15_por_nicho = (df.groupby(["nicho", "sku"])
@@ -321,13 +536,15 @@ def listar_orders():
         colunas = [desc[0] for desc in cursor.description]
 
         df = pd.DataFrame(linhas, columns=colunas)
-        df = df.fillna(0).replace({pd.NA: 0}).astype(object)  # Limpeza básica
+        # Limpeza básica para evitar problemas de serialização
+        df = df.fillna(0).replace({pd.NA: 0}).astype(object) 
 
         logger.info(f"{len(df)} pedidos encontrados")
         return {"total_pedidos": len(df), "pedidos": df.to_dict(orient="records")}
     except Exception as e:
         logger.exception("Erro ao listar pedidos")
         return JSONResponse(status_code=500, content={"erro": str(e)})
+
 # ------------------------------
 # ROTA: Listar pedidos por período
 @app.get("/orders/periodo")
@@ -353,7 +570,8 @@ def listar_orders_periodo(data_inicio: str, data_fim: str):
         colunas = [desc[0] for desc in cursor.description]
 
         df = pd.DataFrame(linhas, columns=colunas)
-        df = df.fillna(0).replace({pd.NA: 0}).astype(object)  # Limpeza básica
+        # Limpeza básica para evitar problemas de serialização
+        df = df.fillna(0).replace({pd.NA: 0}).astype(object) 
 
         logger.info(f"{len(df)} pedidos encontrados no período")
         return {
