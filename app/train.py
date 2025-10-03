@@ -4,7 +4,7 @@ import pandas as pd
 from utils.ml_utils import train_ml_model
 
 # Caminho absoluto do DB
-db_path = os.path.abspath("../database.db")
+db_path = os.path.abspath("database.db")
 print(f"DB absoluto que estou abrindo: {db_path}")
 
 # Conectar ao DB

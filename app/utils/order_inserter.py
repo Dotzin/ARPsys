@@ -50,7 +50,7 @@ class OrderInserter:
                         payment_date_adj = (dt - timedelta(hours=3)).strftime("%Y-%m-%d %H:%M:%S")
 
                     self.db.cursor.execute("""
-                        INSERT OR REPLACE INTO orders (
+                        INSERT OR IGNORE INTO orders (
                             order_id, cart_id, ad, sku, title,
                             quantity, total_value, payment_date,
                             status, cost, gross_profit, taxes, freight,
