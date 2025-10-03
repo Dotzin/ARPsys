@@ -3,15 +3,28 @@ from joblib import dump, load
 import lightgbm as lgb
 import os
 import logging
-from pathlib import Path
+from pathlib import Path # Já importado, mas essencial para a correção
 
 # ------------------------------
 # Configuração de logging
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
+# O restante da configuração de logging deve estar no script principal ou na inicialização
+# logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 
-# Caminho padrão do modelo
-MODEL_PATH = "models/profit_forecast_model.pkl"
+# --- CORREÇÃO DE CAMINHO ---
+# 1. Encontra a localização do arquivo ml_utils.py (ex: /workspaces/ARPsys/app/utils/ml_utils.py)
+# 2. Navega dois níveis acima (.. / ..) para a raiz do projeto (/workspaces/ARPsys/)
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent 
+
+# Caminho completo e absoluto para o modelo
+MODEL_PATH = PROJECT_ROOT / "models" / "profit_forecast_model.pkl"
+
+# Convertendo para string, pois joblib e os.makedirs tendem a ser mais compatíveis com strings em alguns ambientes
+MODEL_PATH_STR = str(MODEL_PATH)
+
+logger.info(f"Caminho absoluto do modelo definido como: {MODEL_PATH_STR}")
+# ---------------------------
+
 
 # ------------------------------
 def extract_features(df: pd.DataFrame) -> pd.DataFrame:
@@ -79,11 +92,14 @@ def train_ml_model(df: pd.DataFrame):
     logger.info("Modelo treinado com sucesso")
 
     # Salvar modelo
-    if not os.path.exists("models"):
-        os.makedirs("models")
-        logger.info("Pasta 'models' criada")
-    dump(model, MODEL_PATH)
-    logger.info(f"Modelo salvo em {MODEL_PATH}")
+    # Agora criamos a pasta usando o caminho absoluto garantido
+    model_dir = Path(MODEL_PATH_STR).parent
+    if not model_dir.exists():
+        os.makedirs(model_dir)
+        logger.info(f"Pasta '{model_dir}' criada")
+        
+    dump(model, MODEL_PATH_STR) # Usando a string do caminho absoluto
+    logger.info(f"Modelo salvo em {MODEL_PATH_STR}")
 
     return model
 
@@ -94,11 +110,12 @@ def predict_sales_for_df(df: pd.DataFrame):
     """
     logger.info("Iniciando previsão de lucro_liquido")
 
-    if not Path(MODEL_PATH).exists():
-        logger.error("Modelo ML não encontrado. Execute train_ml_model() primeiro.")
-        raise FileNotFoundError("Modelo ML não encontrado. Execute train_ml_model() primeiro.")
+    # Verificação usando o caminho absoluto garantido
+    if not Path(MODEL_PATH_STR).exists():
+        logger.error(f"Modelo ML não encontrado em {MODEL_PATH_STR}. Execute train_ml_model() primeiro.")
+        raise FileNotFoundError(f"Modelo ML não encontrado. Execute train_ml_model() primeiro. Esperado em: {MODEL_PATH_STR}")
 
-    model = load(MODEL_PATH)
+    model = load(MODEL_PATH_STR) # Carrega usando a string do caminho absoluto
     logger.info("Modelo ML carregado com sucesso")
 
     df_feat = extract_features(df)
