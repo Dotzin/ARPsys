@@ -1,0 +1,11 @@
+fastapi
+pandas
+requests
+joblib
+lightgbm
+pytest
+pytest-asyncio
+pytest-mock
+httpx
+pytest-cov
+faker

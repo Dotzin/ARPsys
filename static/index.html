@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Relatórios por Período - ARP Sys</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/jquery.dataTables.min.css">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+    <header>
+        <h1>Relatórios por Período</h1>
+        <nav>
+            <a href="/static/daily.html">Relatório Diário em Tempo Real</a>
+        </nav>
+    </header>
+
+    <main>
+        <section id="form-section">
+            <h2>Selecionar Período</h2>
+            <form id="report-form">
+                <label for="data-inicio">Data Início:</label>
+                <input type="date" id="data-inicio" name="data_inicio" required>
+
+                <label for="data-fim">Data Fim:</label>
+                <input type="date" id="data-fim" name="data_fim" required>
+
+                <button type="submit">Gerar Relatório</button>
+                <button type="button" id="export-btn" style="display: none;">Exportar para Excel</button>
+            </form>
+        </section>
+
+        <section id="results-section" style="display: none;">
+            <h2>Resultados</h2>
+
+            <div id="kpis-container">
+                <h3>KPIs Gerais</h3>
+                <div id="kpis-display"></div>
+            </div>
+
+            <!-- Gráficos compactos -->
+            <div class="charts-container">
+                <div id="nicho-chart-container" class="chart-item">
+                    <h4>Análise por Nicho</h4>
+                    <canvas id="nicho-chart" width="250" height="150"></canvas>
+                </div>
+                <div id="hour-chart-container" class="chart-item">
+                    <h4>Lucro por Hora</h4>
+                    <canvas id="hour-chart" width="250" height="150"></canvas>
+                </div>
+                <div id="weekday-chart-container" class="chart-item">
+                    <h4>Lucro por Dia da Semana</h4>
+                    <canvas id="weekday-chart" width="250" height="150"></canvas>
+                </div>
+                <div id="daily-sales-chart-container" class="chart-item">
+                    <h4>Vendas Diárias</h4>
+                    <canvas id="daily-sales-chart" width="250" height="150"></canvas>
+                </div>
+            </div>
+
+            <!-- Tabela única com abas -->
+            <div id="data-table-container">
+                <h3>Dados Detalhados</h3>
+                <div class="tabs">
+                    <button class="tab-button active" onclick="showTab('forecast')">Previsão</button>
+                    <button class="tab-button" onclick="showTab('orders')">Pedidos</button>
+                    <button class="tab-button" onclick="showTab('rankings')">Top SKUs</button>
+                </div>
+                <div id="forecast-tab" class="tab-content active">
+                    <table id="forecast-table" class="display">
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>SKU</th>
+                                <th>Quantidade</th>
+                                <th>Valor Total</th>
+                                <th>Previsão Lucro</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Dados serão inseridos aqui -->
+                        </tbody>
+                    </table>
+                </div>
+                <div id="orders-tab" class="tab-content">
+                    <table id="orders-table" class="display">
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Order Number</th>
+                                <th>Cart Number</th>
+                                <th>SKU</th>
+                                <th>Título</th>
+                                <th>Quantidade</th>
+                                <th>Valor Total</th>
+                                <th>Lucro Líquido</th>
+                                <th>Nicho</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Dados serão inseridos aqui -->
+                        </tbody>
+                    </table>
+                </div>
+                <div id="rankings-tab" class="tab-content">
+                    <table id="rankings-table" class="display">
+                        <thead>
+                            <tr>
+                                <th>SKU</th>
+                                <th>Lucro Líquido</th>
+                                <th>Lucro Bruto</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Dados serão inseridos aqui -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>

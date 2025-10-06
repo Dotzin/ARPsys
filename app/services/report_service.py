@@ -1,0 +1,310 @@
+import logging
+from typing import Dict, Any, List
+from datetime import datetime
+import pandas as pd
+from app.repositories.database_repository import Database
+from app.services.ml_service import predict_sales_for_df
+
+logger = logging.getLogger(__name__)
+
+class ReportService:
+    def __init__(self, database: Database):
+        self.database = database
+        self.logger = logging.getLogger(__name__)
+
+    def get_daily_report_data(self) -> Dict[str, Any] | None:
+        """Calcula e retorna apenas o relatório do dia atual."""
+        hoje = datetime.today().strftime("%Y-%m-%d")
+        self.logger.info(f"Calculando relatório diário para {hoje}")
+
+        try:
+            db = self.database
+            cursor = db.conn.cursor()
+
+            query = """ SELECT o.*, n.nicho FROM orders o LEFT JOIN sku_nichos n ON o.sku = n.sku
+                        WHERE date(o.payment_date) = ? """
+            linhas = cursor.execute(query, (hoje,)).fetchall()
+            colunas = [desc[0] for desc in cursor.description]
+
+            df = pd.DataFrame(linhas, columns=colunas)
+            if df.empty:
+                self.logger.info("Nenhum pedido encontrado para o relatório diário")
+                return {"dia": hoje, "status": "sem_dados", "kpis_diarios": {}}
+
+            # Geração dos KPIs para o dia atual
+            total_pedidos = len(df)
+            total_unidades = int(df["quantity"].sum())
+            faturamento = float(df["total_value"].sum())
+            lucro_liquido = float(df["profit"].sum())
+
+            kpis_diarios = {
+                "lucro_liquido": lucro_liquido,
+                "faturamento": faturamento,
+                "total_pedidos": total_pedidos,
+                "total_unidades": total_unidades,
+            }
+
+            # Análise por nicho do dia
+            por_nicho_dia = (df.groupby("nicho")
+                                 .agg({"profit": "sum", "total_value": "sum", "order_id": "count"})
+                                 .reset_index()
+                                 .rename(columns={"profit": "lucro_liquido", "total_value": "faturamento", "order_id": "total_pedidos"}))
+
+            # Limpeza e conversão para JSON
+            def limpar_df_para_json(df: pd.DataFrame) -> pd.DataFrame:
+                 return df.fillna(0).replace({pd.NA: 0}).astype(object)
+
+            por_nicho_dia = limpar_df_para_json(por_nicho_dia)
+
+            relatorio_final = {
+                "dia": hoje,
+                "status": "sucesso",
+                "kpis_diarios": kpis_diarios,
+                "analise_por_nicho_dia": por_nicho_dia.to_dict(orient="records"),
+                "timestamp_atualizacao": datetime.now().isoformat()
+            }
+
+            return relatorio_final
+
+        except Exception as e:
+            self.logger.exception("Erro ao calcular o relatório diário")
+            return {"dia": hoje, "status": "erro", "erro": str(e), "kpis_diarios": {}}
+
+    def generate_relatorio_flex(self, data_inicio: str = None, data_fim: str = None) -> Dict[str, Any]:
+        """Gera o relatório flexível com KPIs, relatórios diários, análises por nicho/SKU, forecast e rankings."""
+        self.logger.info(f"Gerando relatório flex com data_inicio={data_inicio}, data_fim={data_fim}")
+        try:
+            if not data_inicio or not data_fim:
+                hoje = datetime.today().strftime("%Y-%m-%d")
+                data_inicio = data_fim = hoje
+
+            start = datetime.strptime(data_inicio, "%Y-%m-%d")
+            end = datetime.strptime(data_fim, "%Y-%m-%d")
+            dias_totais = (end - start).days + 1
+        except Exception:
+            self.logger.warning("Datas inválidas fornecidas")
+            raise ValueError("Datas inválidas, use formato YYYY-MM-DD")
+
+        try:
+            db = self.database
+            cursor = db.conn.cursor()
+
+            query = """
+                SELECT o.*, n.nicho
+                FROM orders o
+                LEFT JOIN sku_nichos n ON o.sku = n.sku
+                WHERE date(o.payment_date) BETWEEN ? AND ?
+            """
+            linhas = cursor.execute(query, (start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d"))).fetchall()
+            colunas = [desc[0] for desc in cursor.description]
+            df = pd.DataFrame(linhas, columns=colunas)
+
+            if df.empty:
+                return {"mensagem": "Nenhum pedido encontrado neste período", "skus_sem_nicho": []}
+
+            df["payment_date"] = pd.to_datetime(df["payment_date"], errors="coerce")
+
+            # Extrair campos de data
+            if not df.empty and 'payment_date' in df.columns:
+                df['hour'] = df['payment_date'].dt.hour
+                df['weekday'] = df['payment_date'].dt.weekday
+                df['month'] = df['payment_date'].dt.month
+            else:
+                df['hour'] = 0
+                df['weekday'] = 0
+                df['month'] = 0
+
+            def limpar_df_para_json(df: pd.DataFrame) -> pd.DataFrame:
+                return df.fillna(0).replace({pd.NA: 0}).astype(object)
+
+            # ================================
+            # 1️⃣ KPIs GERAIS
+            # ================================
+            skus_sem_nicho = df[df["nicho"].isna()]["sku"].unique().tolist()
+            kpis_gerais = {
+                "faturamento_total": float(df["total_value"].sum()),
+                "lucro_bruto_total": float(df["gross_profit"].sum()),
+                "lucro_liquido_total": float(df["profit"].sum()),
+                "total_pedidos": int(len(df)),
+                "total_unidades": int(df["quantity"].sum()),
+                "ticket_medio": {
+                    "pedido": float(df["total_value"].sum() / len(df)) if len(df) > 0 else 0,
+                    "unidade": float(df["total_value"].sum() / df["quantity"].sum()) if df["quantity"].sum() > 0 else 0
+                },
+                "custos": {
+                    "custo_total": float(df["cost"].sum()),
+                    "frete_total": float(df["freight"].sum()),
+                    "impostos_total": float(df["taxes"].sum())
+                },
+                "indices": {
+                    "rentabilidade_media": float(df["rentability"].mean() if not df["rentability"].isna().all() else 0),
+                    "profitabilidade_media": float(df["profitability"].mean() if not df["profitability"].isna().all() else 0)
+                },
+                "skus_sem_nicho": skus_sem_nicho
+            }
+
+            # ================================
+            # 2️⃣ RELATÓRIOS DIÁRIOS
+            # ================================
+            relatorios_diarios = []
+
+            for dia, grupo_dia in df.groupby(df["payment_date"].dt.date):
+                resumo = {
+                    "faturamento": float(grupo_dia["total_value"].sum()),
+                    "lucro_bruto": float(grupo_dia["gross_profit"].sum()),
+                    "lucro_liquido": float(grupo_dia["profit"].sum()),
+                    "total_pedidos": int(len(grupo_dia)),
+                    "total_unidades": int(grupo_dia["quantity"].sum()),
+                    "ticket_medio": {
+                        "pedido": float(grupo_dia["total_value"].sum() / len(grupo_dia)) if len(grupo_dia) > 0 else 0,
+                        "unidade": float(grupo_dia["total_value"].sum() / grupo_dia["quantity"].sum()) if grupo_dia["quantity"].sum() > 0 else 0
+                    }
+                }
+
+                # nichos dentro do dia
+                nichos = []
+                for nicho, grupo_nicho in grupo_dia.groupby("nicho"):
+                    nichos.append({
+                        "nicho": nicho if nicho else "Sem nicho",
+                        "faturamento": float(grupo_nicho["total_value"].sum()),
+                        "lucro_bruto": float(grupo_nicho["gross_profit"].sum()),
+                        "profit": float(grupo_nicho["profit"].sum()),
+                        "total_pedidos": int(len(grupo_nicho)),
+                        "total_unidades": int(grupo_nicho["quantity"].sum())
+                    })
+
+                relatorios_diarios.append({
+                    "data": str(dia),
+                    "resumo": resumo,
+                    "nichos": nichos
+                })
+
+            # ================================
+            # 3️⃣ RELATÓRIO POR NICHO GERAL
+            # ================================
+            por_nicho = (df.groupby("nicho")
+                            .agg({
+                                "profit": "sum",
+                                "gross_profit": "sum",
+                                "order_id": "count",
+                                "quantity": "sum",
+                                "total_value": "sum",
+                                "freight": "sum",
+                                "taxes": "sum",
+                                "cost": "sum",
+                                "rentability": "mean",
+                                "profitability": "mean"
+                            })
+                            .reset_index()
+                            .rename(columns={
+                                "profit": "lucro_liquido",
+                                "gross_profit": "lucro_bruto",
+                                "order_id": "total_pedidos",
+                                "quantity": "total_unidades",
+                                "total_value": "faturamento_total"
+                            }))
+
+            por_nicho["participacao_faturamento"] = por_nicho["faturamento_total"] / kpis_gerais["faturamento_total"] if kpis_gerais["faturamento_total"] != 0 else 0
+            por_nicho["participacao_lucro"] = por_nicho["lucro_liquido"] / kpis_gerais["lucro_liquido_total"] if kpis_gerais["lucro_liquido_total"] != 0 else 0
+            por_nicho["media_dia_valor"] = por_nicho["faturamento_total"] / dias_totais
+            por_nicho["media_dia_unidades"] = por_nicho["total_unidades"] / dias_totais
+            por_nicho = limpar_df_para_json(por_nicho)
+
+            # ================================
+            # 4️⃣ RELATÓRIO POR SKU
+            # ================================
+            por_sku = (df.groupby(["sku", "nicho"])
+                         .agg({
+                             "profit": "sum",
+                             "gross_profit": "sum",
+                             "order_id": "count",
+                             "quantity": "sum",
+                             "total_value": "sum"
+                         })
+                         .reset_index()
+                         .rename(columns={
+                             "profit": "lucro_liquido",
+                             "gross_profit": "lucro_bruto",
+                             "order_id": "total_pedidos",
+                             "quantity": "total_unidades",
+                             "total_value": "faturamento_total"
+                         }))
+            por_sku = limpar_df_para_json(por_sku)
+
+            # ================================
+            # 4.5️⃣ AGREGADOS POR HORA E DIA DA SEMANA
+            # ================================
+            por_hora = (df.groupby("hour")
+                          .agg({"profit": "sum", "total_value": "sum", "order_id": "count"})
+                          .reset_index()
+                          .rename(columns={"profit": "lucro_liquido", "total_value": "faturamento", "order_id": "total_pedidos"}))
+            por_hora = limpar_df_para_json(por_hora)
+
+            por_dia_semana = (df.groupby("weekday")
+                                .agg({"profit": "sum", "total_value": "sum", "order_id": "count"})
+                                .reset_index()
+                                .rename(columns={"profit": "lucro_liquido", "total_value": "faturamento", "order_id": "total_pedidos"}))
+            por_dia_semana = limpar_df_para_json(por_dia_semana)
+
+            # ================================
+            # 4.6️⃣ LISTA DE PEDIDOS (TOP 100 PARA PERFORMANCE)
+            # ================================
+            pedidos_lista = df.sort_values("payment_date", ascending=False).head(100)[["payment_date", "order_id", "cart_id", "sku", "title", "quantity", "total_value", "profit", "nicho"]].to_dict(orient="records")
+
+            # ================================
+            # 5️⃣ FORECAST (ML)
+            # ================================
+            df_forecast, conclusoes = predict_sales_for_df(df)
+            df_forecast = limpar_df_para_json(df_forecast)
+
+            # ================================
+            # 6️⃣ RANKINGS
+            # ================================
+            top_ads = (df.groupby("ad")
+                         .agg({"profit": "sum", "gross_profit": "sum"})
+                         .sort_values("profit", ascending=False)
+                         .head(30)
+                         .reset_index())
+            top_skus = (df.groupby("sku")
+                          .agg({"profit": "sum", "gross_profit": "sum"})
+                          .sort_values("profit", ascending=False)
+                          .head(30)
+                          .reset_index())
+            top_por_nicho = (df.groupby(["nicho", "sku"])
+                               .agg({"profit": "sum", "gross_profit": "sum"})
+                               .sort_values(["nicho", "profit"], ascending=[True, False])
+                               .groupby(level=0)
+                               .head(15)
+                               .reset_index())
+
+            self.logger.info("Relatório flex gerado com sucesso")
+
+            return {
+                "periodo": {
+                    "inicio": start.strftime("%Y-%m-%d"),
+                    "fim": end.strftime("%Y-%m-%d"),
+                    "dias_totais": dias_totais
+                },
+                "kpis_gerais": kpis_gerais,
+                "relatorios": {
+                    "diario": relatorios_diarios,
+                    "por_nicho": por_nicho.to_dict(orient="records"),
+                    "por_sku": por_sku.to_dict(orient="records"),
+                    "por_hora": por_hora.to_dict(orient="records"),
+                    "por_dia_semana": por_dia_semana.to_dict(orient="records"),
+                    "pedidos_lista": pedidos_lista
+                },
+                "rankings": {
+                    "top_ads": top_ads.to_dict(orient="records"),
+                    "top_skus": top_skus.to_dict(orient="records"),
+                    "top_por_nicho": top_por_nicho.to_dict(orient="records")
+                },
+                "forecast": {
+                    "dados": df_forecast.to_dict(orient="records"),
+                    "conclusoes": conclusoes
+                }
+            }
+
+        except Exception as e:
+            self.logger.exception("Erro ao gerar relatório flex")
+            raise
