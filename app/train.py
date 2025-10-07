@@ -1,25 +1,28 @@
 import os
 import sqlite3
 import pandas as pd
+import logging
 from utils.ml_utils import train_ml_model
 
-# Caminho absoluto do DB
-db_path = os.path.abspath("database.db")
-print(f"DB absoluto que estou abrindo: {db_path}")
+logger = logging.getLogger(__name__)
 
-# Conectar ao DB
+# Absolute path to DB
+db_path = os.path.abspath("database.db")
+logger.info(f"Absolute DB path being opened: {db_path}")
+
+# Connect to DB
 conn = sqlite3.connect(db_path)
 cursor = conn.cursor()
 
-# Verificar se a tabela 'orders' existe
+# Check if 'orders' table exists
 cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
 tables = [t[0] for t in cursor.fetchall()]
-print("Tabelas existentes no DB:", tables)
+logger.info(f"Existing tables in DB: {tables}")
 
 if "orders" not in tables:
-    raise RuntimeError("A tabela 'orders' não existe no DB que estamos abrindo!")
+    raise RuntimeError("The 'orders' table does not exist in the DB being opened!")
 
-# Buscar pedidos com join nos nichos
+# Fetch orders with join on niches
 query = """
 SELECT o.*, n.nicho
 FROM orders o
@@ -27,10 +30,10 @@ LEFT JOIN sku_nichos n ON o.sku = n.sku
 """
 df_orders = pd.read_sql(query, conn)
 
-# Verificar se há registros
+# Check if there are records
 if df_orders.empty:
-    raise ValueError("Não há pedidos com nichos para treinar o modelo.")
+    raise ValueError("There are no orders with niches to train the model.")
 
-# Treinar o modelo
+# Train the model
 model = train_ml_model(df_orders)
-print("Modelo treinado com sucesso e salvo em models/sales_forecast_model.pkl")
+logger.info("Model trained successfully and saved in models/sales_forecast_model.pkl")

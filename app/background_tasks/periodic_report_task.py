@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 from datetime import datetime, timedelta
 from app.core.connection_manager import ConnectionManager
 from app.services.data_service import Data
@@ -7,6 +8,7 @@ from app.services.data_parser_service import DataParser
 from app.services.order_service import OrderInserter
 
 logger = logging.getLogger(__name__)
+
 
 class BackgroundTaskService:
     def __init__(self, app, manager, report_service, update_interval_seconds=300):
@@ -22,11 +24,11 @@ class BackgroundTaskService:
         while True:
             try:
                 logger.info("Executando ciclo de atualização: obtendo pedidos...")
-                # 1. Atualizar Pedidos (Chamada à API externa e inserção no DB)
+                # 1. Update Orders (Call to external API and DB insertion)
                 try:
-                    logger.info("Iniciando atualização de pedidos da API externa.")
-                    # Ajustar para o fuso horário da API (UTC, BRT é UTC-3)
-                    # Se hora < 21, enviar hoje, senão amanhã
+                    logger.info("Starting order update from external API.")
+                    # Adjust for API timezone (UTC, BRT is UTC-3)
+                    # If hour < 21, send today, else tomorrow
                     agora = datetime.now()
                     if agora.hour < 21:
                         data_ajustada = agora
@@ -34,42 +36,65 @@ class BackgroundTaskService:
                         data_ajustada = agora + timedelta(days=1)
                     data_inicio = data_fim = data_ajustada.strftime("%Y-%m-%d")
                     logger.info(f"Data ajustada para requisição: {data_inicio}")
-                    url = f'https://app.arpcommerce.com.br/sells?r={data_inicio}'
+                    url = f"https://app.arpcommerce.com.br/sells?r={data_inicio}"
                     logger.info(f"Fazendo requisição para URL: {url}")
-                    headers = {'session': '.eJwVir0KwjAURt_l0rGU5j_tpLg4Oam4leR6UwqmLUnrIr678YMDh8P3gWGlFN1M8wb9lnaqgaKbXtCDS-uhgEuMlJCaIo1PUMOeKQ2Zcp6Wufx0-1_1OB2v7zHfs7-o8y3KqkQUilsflO245UFoRYS2C8wK9ZSuVYZ59Fy2xmjjAyomrDaSDDpkAr4_KMQwig.aMxLsg.3D5e5s_a96H1mPB_uHM7CySJ7n8'}
+                    session_token = os.getenv("API_SESSION_TOKEN")
+                    if not session_token:
+                        raise ValueError(
+                            "API_SESSION_TOKEN not set in environment variables"
+                        )
+                    headers = {"session": session_token}
 
                     data_obj = Data(url, headers)
                     raw_json = data_obj.get_data()
-                    logger.info(f"Requisição concluída. Dados brutos obtidos: {len(raw_json)} registros")
+                    logger.info(
+                        f"Requisição concluída. Dados brutos obtidos: {len(raw_json)} registros"
+                    )
 
                     parser = DataParser(raw_json)
                     pedidos = parser.parse_orders()
                     logger.info(f"Pedidos parseados: {len(pedidos)} pedidos")
 
-                    # Inserção no banco de dados
+                    # Database insertion
                     self.app.state.order_inserter.insert_orders(pedidos)
-                    logger.info(f"Ciclo de atualização: {len(pedidos)} pedidos inseridos/atualizados no DB.")
+                    logger.info(
+                        f"Update cycle: {len(pedidos)} orders inserted/updated in DB."
+                    )
                 except Exception as e:
-                    logger.error(f"Falha na atualização de pedidos da API externa: {e}")
-                    # Continua para o cálculo do relatório, que pode usar dados antigos
+                    logger.error(f"Failed to update orders from external API: {e}")
+                    # Continues to report calculation, which can use old data
 
-                # 2. Calcular o Relatório Diário
+                # 2. Calculate Daily Report
                 relatorio = self.report_service.get_daily_report_data()
 
-                # 3. Armazenar e fazer Broadcast
-                if relatorio and relatorio.get("status") == "sucesso" and relatorio != self.current_daily_report:
+                # 3. Store and Broadcast
+                if (
+                    relatorio
+                    and relatorio.get("status") == "sucesso"
+                    and relatorio != self.current_daily_report
+                ):
                     self.current_daily_report = relatorio
-                    await self.manager.broadcast({"tipo": "relatorio_diario", "dados": relatorio})
-                    logger.info("Novo relatório diário calculado e transmitido via WebSocket.")
+                    await self.manager.broadcast(
+                        {"tipo": "relatorio_diario", "dados": relatorio}
+                    )
+                    logger.info(
+                        "New daily report calculated and broadcasted via WebSocket."
+                    )
                 elif relatorio and relatorio.get("status") == "sucesso":
-                    logger.info("Relatório diário calculado, mas sem alterações desde a última verificação. Sem broadcast.")
+                    logger.info(
+                        "Daily report calculated, but no changes since last check. No broadcast."
+                    )
                 else:
-                    logger.warning("Relatório diário não pôde ser calculado (sem dados ou erro). Sem broadcast.")
+                    logger.warning(
+                        "Daily report could not be calculated (no data or error). No broadcast."
+                    )
 
             except Exception as e:
-                logger.exception("Erro fatal na tarefa periódica de atualização e broadcast")
+                logger.exception(
+                    "Erro fatal na tarefa periódica de atualização e broadcast"
+                )
 
-            # 4. Esperar o próximo ciclo
+            # 4. Wait for next cycle
             await asyncio.sleep(self.update_interval_seconds)
 
     def start(self):

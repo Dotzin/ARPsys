@@ -2,6 +2,7 @@ import os
 import logging
 from app.repositories.database_repository import Database, TableCreator
 
+
 class DatabaseService:
     def __init__(self, db_path: str):
         self.db_path = db_path

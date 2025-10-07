@@ -13,11 +13,18 @@ from app.core.connection_manager import ConnectionManager
 from app.background_tasks.periodic_report_task import BackgroundTaskService
 import os
 import logging
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
 
 logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -38,8 +45,17 @@ async def lifespan(app: FastAPI):
     app.state.background_task_service.stop()
     app.state.database_service.close()
 
-# Função para criar e configurar o app FastAPI
-def create_app():
+
+def create_app() -> FastAPI:
+    """
+    Create and configure the FastAPI application.
+
+    This function initializes all services, sets up dependency injection,
+    mounts static files, and includes all routers.
+
+    Returns:
+        FastAPI: The configured FastAPI application instance.
+    """
     app = FastAPI(lifespan=lifespan)
 
     # Mount static files
@@ -65,27 +81,6 @@ def create_app():
     app.state.sku_nicho_inserter = sku_nicho_inserter
     app.state.connection_manager = connection_manager
 
-    # Override dependency functions to use app state
-    from app.routes.relatorio_routes import get_order_inserter, get_report_service, get_connection_manager
-    from app.routes.sku_nicho_routes import get_sku_nicho_inserter
-    from app.routes.orders_routes import get_database
-    from app.routes.websocket_routes import get_connection_manager as get_ws_manager, get_report_service as get_ws_report
-
-    def _get_order_inserter():
-        return app.state.order_inserter
-
-    def _get_report_service():
-        return app.state.report_service
-
-    def _get_connection_manager():
-        return app.state.connection_manager
-
-    def _get_sku_nicho_inserter():
-        return app.state.sku_nicho_inserter
-
-    def _get_database():
-        return app.state.database_service.database
-
     # Services are now injected via app.state in dependency functions
 
     # Include routers
@@ -95,7 +90,9 @@ def create_app():
     app.include_router(websocket_router)
 
     # Initialize background task service (will be started in lifespan)
-    background_task_service = BackgroundTaskService(app, connection_manager, report_service)
+    background_task_service = BackgroundTaskService(
+        app, connection_manager, report_service
+    )
     app.state.background_task_service = background_task_service
 
     logger.info("App criado e configurado com sucesso")

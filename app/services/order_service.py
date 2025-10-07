@@ -16,7 +16,17 @@ class OrderInserter:
                     orders_dict[cart_id] = []
                 orders_dict[cart_id].append(order)
         elif isinstance(orders_input, dict):
-            orders_dict = orders_input
+            # Check if it's a single order dict
+            if 'order_id' in orders_input or 'order' in orders_input:
+                orders_input = [orders_input]
+                orders_dict = {}
+                for order in orders_input:
+                    cart_id = order.get('cart') or order.get('cart_id')
+                    if cart_id not in orders_dict:
+                        orders_dict[cart_id] = []
+                    orders_dict[cart_id].append(order)
+            else:
+                orders_dict = orders_input
         else:
             raise ValueError("orders_input deve ser uma lista ou um dicionário")
 

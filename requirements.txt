@@ -9,3 +9,7 @@ pytest-mock
 httpx
 pytest-cov
 faker
+python-dotenv
+black
+flake8
+mypy

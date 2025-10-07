@@ -1,11 +1,11 @@
-.PHONY: test test-unit test-integration test-api install-test-deps clean-test
+.PHONY: test test-unit test-integration test-api install-test-deps clean-test lint format type-check
 
 # Install test dependencies
 install-test-deps:
 	pip install -r requirements-test.txt
 
 # Set PYTHONPATH for all test commands
-PYTHONPATH := /workspaces/ARPsys
+PYTHONPATH := /home/aribas/Documentos/ARPsys
 
 # Run all tests
 test: test-unit test-integration test-api
@@ -47,3 +47,15 @@ test-verbose:
 # Run tests and stop on first failure
 test-fast:
 	PYTHONPATH=$(PYTHONPATH) pytest tests/ -x
+
+# Lint code with flake8
+lint:
+	flake8 app/ tests/ --max-line-length=88 --extend-ignore=E203,W503
+
+# Format code with black
+format:
+	black app/ tests/
+
+# Type check with mypy
+type-check:
+	mypy app/ --ignore-missing-imports

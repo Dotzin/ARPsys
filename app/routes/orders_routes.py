@@ -8,9 +8,11 @@ import logging
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+
 # Dependency injection for services
 def get_database(request: Request) -> Database:
     return request.app.state.database_service.database
+
 
 # Rotas relacionadas a pedidos
 @router.get("/orders")
@@ -18,6 +20,7 @@ def listar_orders(database: Database = Depends(get_database)):
     logger.info("Listando todos os pedidos da tabela orders")
     try:
         db = database
+        assert db.conn is not None
         cursor = db.conn.cursor()
         cursor.execute("SELECT * FROM orders")
         linhas = cursor.fetchall()
@@ -33,8 +36,11 @@ def listar_orders(database: Database = Depends(get_database)):
         logger.exception("Erro ao listar pedidos")
         return JSONResponse(status_code=500, content={"erro": str(e)})
 
+
 @router.get("/orders/periodo")
-def listar_orders_periodo(data_inicio: str, data_fim: str, database: Database = Depends(get_database)):
+def listar_orders_periodo(
+    data_inicio: str, data_fim: str, database: Database = Depends(get_database)
+):
     logger.info(f"Listando pedidos entre {data_inicio} e {data_fim}")
     try:
         # Validar formato
@@ -43,9 +49,13 @@ def listar_orders_periodo(data_inicio: str, data_fim: str, database: Database = 
             fim = datetime.strptime(data_fim, "%Y-%m-%d")
         except ValueError:
             logger.warning("Datas inválidas fornecidas")
-            return JSONResponse(status_code=400, content={"erro": "Datas inválidas, use formato YYYY-MM-DD"})
+            return JSONResponse(
+                status_code=400,
+                content={"erro": "Datas inválidas, use formato YYYY-MM-DD"},
+            )
 
         db = database
+        assert db.conn is not None
         cursor = db.conn.cursor()
         query = """
             SELECT * FROM orders
@@ -62,7 +72,7 @@ def listar_orders_periodo(data_inicio: str, data_fim: str, database: Database = 
         return {
             "periodo": {"inicio": data_inicio, "fim": data_fim},
             "total_pedidos": len(df),
-            "pedidos": df.to_dict(orient="records")
+            "pedidos": df.to_dict(orient="records"),
         }
     except Exception as e:
         logger.exception("Erro ao listar pedidos por período")

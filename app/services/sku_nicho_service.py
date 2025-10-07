@@ -1,5 +1,6 @@
 import logging
 
+
 class SkuNichoInserter:
     def __init__(self, db):
         self.db = db
@@ -11,7 +12,7 @@ class SkuNichoInserter:
             self.logger.info(f"Inserindo SKU '{sku}' no nicho '{nicho}'")
             self.db.cursor.execute(
                 "INSERT OR IGNORE INTO sku_nichos (sku, nicho) VALUES (?, ?)",
-                (sku, nicho)
+                (sku, nicho),
             )
             self.db.commit()
             self.logger.info(f"SKU '{sku}' inserido com sucesso")
@@ -24,8 +25,7 @@ class SkuNichoInserter:
             self.logger.info(f"Inserindo {len(sku_nicho_list)} registros de SKU/nicho")
             values = [(item["sku"], item["nicho"]) for item in sku_nicho_list]
             self.db.cursor.executemany(
-                "INSERT INTO sku_nichos (sku, nicho) VALUES (?, ?)",
-                values
+                "INSERT INTO sku_nichos (sku, nicho) VALUES (?, ?)", values
             )
             self.db.commit()
             self.logger.info("Inserção múltipla concluída com sucesso")
@@ -37,8 +37,7 @@ class SkuNichoInserter:
         try:
             self.logger.info(f"Atualizando SKU '{sku}' para o nicho '{new_nicho}'")
             self.db.cursor.execute(
-                "UPDATE sku_nichos SET nicho = ? WHERE sku = ?",
-                (new_nicho, sku)
+                "UPDATE sku_nichos SET nicho = ? WHERE sku = ?", (new_nicho, sku)
             )
             self.db.commit()
             rowcount = self.db.cursor.rowcount
@@ -51,10 +50,7 @@ class SkuNichoInserter:
     def delete_sku(self, sku: str):
         try:
             self.logger.info(f"Deletando SKU '{sku}'")
-            self.db.cursor.execute(
-                "DELETE FROM sku_nichos WHERE sku = ?",
-                (sku,)
-            )
+            self.db.cursor.execute("DELETE FROM sku_nichos WHERE sku = ?", (sku,))
             self.db.commit()
             rowcount = self.db.cursor.rowcount
             self.logger.info(f"{rowcount} registro(s) deletado(s)")
@@ -66,9 +62,7 @@ class SkuNichoInserter:
     def list_all(self):
         try:
             self.logger.info("Listando todos os SKUs")
-            self.db.cursor.execute(
-                "SELECT sku, nicho, created_at FROM sku_nichos"
-            )
+            self.db.cursor.execute("SELECT sku, nicho, created_at FROM sku_nichos")
             rows = self.db.cursor.fetchall()
             self.logger.info(f"{len(rows)} registros retornados")
             return rows
