@@ -21,6 +21,7 @@ class ConnectionManager:
         await websocket.send_json(message)
 
     async def broadcast(self, message: Dict[str, Any]):
+        self.logger.info(f"Broadcast enviado para {len(self.active_connections)} conexões: {message.get('tipo')}")
         for connection in list(self.active_connections):
             try:
                 await connection.send_json(message)

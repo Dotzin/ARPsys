@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from app.core.connection_manager import ConnectionManager
 from app.services.data_service import Data
 from app.services.data_parser_service import DataParser
@@ -24,16 +24,27 @@ class BackgroundTaskService:
                 logger.info("Executando ciclo de atualização: obtendo pedidos...")
                 # 1. Atualizar Pedidos (Chamada à API externa e inserção no DB)
                 try:
-                    data_inicio = data_fim = datetime.today().strftime("%Y-%m-%d")
+                    logger.info("Iniciando atualização de pedidos da API externa.")
+                    # Ajustar para o fuso horário da API (UTC, BRT é UTC-3)
+                    # Se hora < 21, enviar hoje, senão amanhã
+                    agora = datetime.now()
+                    if agora.hour < 21:
+                        data_ajustada = agora
+                    else:
+                        data_ajustada = agora + timedelta(days=1)
+                    data_inicio = data_fim = data_ajustada.strftime("%Y-%m-%d")
+                    logger.info(f"Data ajustada para requisição: {data_inicio}")
                     url = f'https://app.arpcommerce.com.br/sells?r={data_inicio}'
+                    logger.info(f"Fazendo requisição para URL: {url}")
                     headers = {'session': '.eJwVir0KwjAURt_l0rGU5j_tpLg4Oam4leR6UwqmLUnrIr678YMDh8P3gWGlFN1M8wb9lnaqgaKbXtCDS-uhgEuMlJCaIo1PUMOeKQ2Zcp6Wufx0-1_1OB2v7zHfs7-o8y3KqkQUilsflO245UFoRYS2C8wK9ZSuVYZ59Fy2xmjjAyomrDaSDDpkAr4_KMQwig.aMxLsg.3D5e5s_a96H1mPB_uHM7CySJ7n8'}
 
                     data_obj = Data(url, headers)
                     raw_json = data_obj.get_data()
-                    logger.info(f"Dados brutos obtidos: {len(raw_json)} registros")
+                    logger.info(f"Requisição concluída. Dados brutos obtidos: {len(raw_json)} registros")
 
                     parser = DataParser(raw_json)
                     pedidos = parser.parse_orders()
+                    logger.info(f"Pedidos parseados: {len(pedidos)} pedidos")
 
                     # Inserção no banco de dados
                     self.app.state.order_inserter.insert_orders(pedidos)

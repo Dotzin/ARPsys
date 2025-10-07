@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configurações - ARP Sys</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header>
+        <div class="header-right">
+            <div class="dropdown">
+                <button class="dropbtn">Relatórios</button>
+                <div class="dropdown-content">
+                    <a href="/static/daily.html">Relatório Diário em Tempo Real</a>
+                    <a href="/static/index.html">Relatórios por Período</a>
+                    <a href="/static/settings.html">Configurações</a>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <section>
+            <h2>Configurações</h2>
+            <div>
+                <label for="theme-toggle">Modo:</label>
+                <select id="theme-toggle" onchange="changeTheme()">
+                    <option value="light">Claro</option>
+                    <option value="dark">Escuro</option>
+                </select>
+            </div>
+            <button id="add-sku-btn">Adicionar SKU</button>
+        </section>
+    </main>
+
+    <!-- Modal for adding SKU -->
+    <div id="sku-modal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Adicionar SKU</h2>
+            <div id="xlsx-section">
+                <h3>Enviar Arquivo XLSX</h3>
+                <input type="file" id="xlsx-file" accept=".xlsx">
+                <button id="send-xlsx-btn">Enviar Arquivo</button>
+            </div>
+            <div id="single-section">
+                <h3>Adicionar SKU Único</h3>
+                <input type="text" id="single-sku" placeholder="SKU">
+                <input type="text" id="single-nicho" placeholder="Nicho">
+                <button id="add-single-btn">Adicionar SKU Único</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/settings.js"></script>
+</body>
+</html>

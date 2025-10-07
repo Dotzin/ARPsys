@@ -10,20 +10,95 @@ body {
     line-height: 1.6;
     color: #333;
     background-color: #f4f4f4;
-    padding: 20px;
+    padding: 0;
 }
 
 header {
-    background-color: #007bff;
+    background-color: #2a2d30;
     color: white;
     padding: 1rem;
-    text-align: center;
     margin-bottom: 2rem;
     border-radius: 8px;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
 }
 
-header h1 {
-    margin-bottom: 0.5rem;
+.header-right {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+}
+
+/* Dropdown container */
+.dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+/* Dropdown Button */
+.dropbtn, .settings-btn {
+    background-color: #6c757d;
+    color: white;
+    padding: 0.75rem 1rem;
+    font-size: 1rem;
+    border: none;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background-color 0.3s;
+}
+
+.dropbtn:hover, .settings-btn:hover {
+    background-color: #5a6268;
+}
+
+/* Dropdown Content (Hidden by default) */
+.dropdown-content {
+    display: none;
+    position: absolute;
+    background-color: #f9f9f9;
+    min-width: 200px;
+    left: 0;
+    top: 100%;
+    box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+    z-index: 1;
+    border-radius: 4px;
+}
+
+/* Links inside the dropdown */
+.dropdown-content a {
+    color: black;
+    padding: 12px 16px;
+    text-decoration: none;
+    display: block;
+}
+
+/* Change color of dropdown links on hover */
+.dropdown-content a:hover {
+    background-color: #f1f1f1;
+}
+
+/* Dark mode for dropdown */
+.dark .dropdown-content {
+    background-color: #333;
+}
+
+.dark .dropdown-content a {
+    color: white;
+}
+
+.dark .dropdown-content a:hover {
+    background-color: #555;
+}
+
+/* Show the dropdown menu on hover */
+.dropdown:hover .dropdown-content {
+    display: block;
+}
+
+/* Change the background color of the dropdown button when the dropdown content is shown */
+.dropdown:hover .dropbtn {
+    background-color: #5a6268;
 }
 
 nav a {
@@ -37,6 +112,20 @@ nav a:hover {
     text-decoration: underline;
 }
 
+header select {
+    background-color: #0056b3;
+    color: white;
+    border: none;
+    padding: 0.5rem;
+    border-radius: 4px;
+    font-size: 1rem;
+}
+
+header select option {
+    background-color: white;
+    color: #333;
+}
+
 main {
     max-width: 1200px;
     margin: 0 auto;
@@ -46,8 +135,16 @@ main {
     box-shadow: 0 0 10px rgba(0,0,0,0.1);
 }
 
+.full-width {
+    max-width: none;
+    margin: 0;
+    border-radius: 0;
+    box-shadow: none;
+}
+
 section {
     margin-bottom: 2rem;
+    padding: 1rem;
 }
 
 h2 {
@@ -84,7 +181,7 @@ input[type="date"] {
 }
 
 button {
-    background-color: #28a745;
+    background-color: #6c757d;
     color: white;
     border: none;
     padding: 0.75rem 1.5rem;
@@ -95,16 +192,16 @@ button {
 }
 
 button:hover {
-    background-color: #218838;
+    background-color: #5a6268;
 }
 
 #export-btn {
-    background-color: #ffc107;
-    color: #212529;
+    background-color: #6c757d;
+    color: white;
 }
 
 #export-btn:hover {
-    background-color: #e0a800;
+    background-color: #5a6268;
 }
 
 /* Table styles */
@@ -112,6 +209,10 @@ table {
     width: 100%;
     border-collapse: collapse;
     margin-bottom: 2rem;
+}
+
+.dataTables_wrapper {
+    overflow-x: auto;
 }
 
 th, td {
@@ -159,6 +260,11 @@ tbody tr:hover {
 
     th, td {
         padding: 0.5rem;
+    }
+
+    .dropdown-content {
+        right: 0;
+        left: auto;
     }
 }
 
@@ -226,4 +332,245 @@ tbody tr:hover {
 
 .tab-content.active {
     display: block;
+}
+
+/* SKU details tabs */
+#sku-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+}
+
+.sku-tab-button {
+    background: #f1f1f1;
+    border: none;
+    padding: 10px 15px;
+    cursor: pointer;
+    font-size: 14px;
+    margin-right: 5px;
+    margin-bottom: 5px;
+}
+
+.sku-tab-button.active {
+    background: #007bff;
+    color: white;
+}
+
+.sku-tab-content {
+    display: none;
+}
+
+.sku-tab-content.active {
+    display: block;
+}
+
+/* Cards for daily report */
+.card, .kpi-card {
+    border: 1px solid #ddd;
+    padding: 15px;
+    margin: 10px 0;
+    border-radius: 8px;
+    background-color: #fafafa;
+}
+
+.card p {
+    margin: 5px 0;
+}
+
+/* Layout for daily report */
+.row {
+    display: flex;
+    flex-wrap: wrap;
+}
+
+.half {
+    flex: 1;
+    padding: 10px;
+}
+
+canvas {
+    width: 100% !important;
+    height: auto !important;
+    max-height: 400px;
+}
+
+/* Compact styles for last sale, best product, best ad */
+#ultima-venda-section,
+#melhor-produto-section,
+#melhor-anuncio-section {
+    padding: 10px;
+    margin-bottom: 10px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+}
+
+#ultima-venda-section h2,
+#melhor-produto-section h2,
+#melhor-anuncio-section h2 {
+    font-size: 1.2em;
+    margin-bottom: 5px;
+}
+
+#ultima-venda-display,
+#melhor-produto-display,
+#melhor-anuncio-display {
+    font-size: 0.9em;
+}
+
+/* Dark mode */
+.dark {
+    background-color: #121212;
+    color: #ffffff;
+}
+
+.dark header {
+    background-color: #1e1e1e;
+}
+
+.dark main {
+    background-color: #1e1e1e;
+}
+
+.dark .full-width {
+    background-color: #121212;
+}
+
+.dark section {
+    background-color: #2d2d2d;
+    border: 1px solid #444;
+}
+
+.dark h2 {
+    color: #ffffff;
+    border-bottom-color: #444;
+}
+
+.dark h3 {
+    color: #cccccc;
+}
+
+.dark table {
+    background-color: #2d2d2d;
+    color: #ffffff;
+}
+
+.dark th {
+    background-color: #333;
+    color: #ffffff;
+}
+
+.dark tbody tr:hover {
+    background-color: #333;
+}
+
+.dark .card, .dark .kpi-card {
+    background-color: #2d2d2d;
+    border-color: #444;
+}
+
+.dark input[type="date"] {
+    background-color: #333;
+    color: #ffffff;
+    border-color: #555;
+}
+
+.dark button {
+    background-color: #007bff;
+}
+
+.dark button:hover {
+    background-color: #0056b3;
+}
+
+.dark #export-btn {
+    background-color: #6c757d;
+    color: white;
+}
+
+.dark #export-btn:hover {
+    background-color: #5a6268;
+}
+
+.dark header select {
+    background-color: #333;
+    color: #ffffff;
+}
+
+.dark header select option {
+    background-color: #1e1e1e;
+    color: #ffffff;
+}
+
+/* Modal styles */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0,0,0,0.4);
+}
+
+.modal-content {
+    background-color: #fefefe;
+    margin: 15% auto;
+    padding: 20px;
+    border: 1px solid #888;
+    width: 80%;
+    max-width: 500px;
+    border-radius: 8px;
+}
+
+.close {
+    color: #aaa;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+}
+
+.close:hover,
+.close:focus {
+    color: black;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.modal h2 {
+    margin-top: 0;
+}
+
+.modal input {
+    width: 100%;
+    padding: 8px;
+    margin: 8px 0;
+    box-sizing: border-box;
+}
+
+.modal button {
+    background-color: #6c757d;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    margin: 10px 0;
+    cursor: pointer;
+    border-radius: 4px;
+}
+
+.modal button:hover {
+    background-color: #5a6268;
+}
+
+/* Dark mode for modal */
+.dark .modal-content {
+    background-color: #2d2d2d;
+    color: #ffffff;
+}
+
+.dark .modal input {
+    background-color: #333;
+    color: #ffffff;
+    border-color: #555;
 }

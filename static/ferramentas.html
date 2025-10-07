@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ferramentas - ARP Sys</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header>
+        <div class="header-right">
+            <div class="dropdown">
+                <button class="dropbtn">Relatórios</button>
+                <div class="dropdown-content">
+                    <a href="/static/daily.html">Relatório Diário em Tempo Real</a>
+                    <a href="/static/index.html">Relatórios por Período</a>
+                </div>
+            </div>
+            <div class="dropdown">
+                <button class="dropbtn">Ferramentas</button>
+                <div class="dropdown-content">
+                    <a href="/static/ferramentas.html">Gerador GTIN-13/EAN-13</a>
+                </div>
+            </div>
+            <button class="settings-btn" onclick="window.location.href='/static/settings.html'">Configurações</button>
+        </div>
+    </header>
+
+    <main>
+        <section>
+            <h2>Gerador GTIN-13/EAN-13</h2>
+            <p>Gerar códigos de barras GTIN-13 (EAN-13).</p>
+            <button id="generate-btn">Gerar Código</button>
+            <div id="result"></div>
+        </section>
+    </main>
+
+    <script src="/static/ferramentas.js"></script>
+</body>
+</html>

@@ -56,12 +56,49 @@ class ReportService:
 
             por_nicho_dia = limpar_df_para_json(por_nicho_dia)
 
+            # Rankings do dia
+            top_nichos_dia = por_nicho_dia.sort_values("lucro_liquido", ascending=False).head(10).to_dict(orient="records")
+            top_skus_dia = (df.groupby("sku")
+                              .agg({"profit": "sum", "gross_profit": "sum"})
+                              .sort_values("profit", ascending=False)
+                              .head(10)
+                              .reset_index()
+                              .rename(columns={"profit": "lucro_liquido", "gross_profit": "lucro_bruto"})
+                              .to_dict(orient="records"))
+
+            # Última venda
+            ultima_venda_df = df.sort_values("payment_date", ascending=False).head(1)[["payment_date", "order_id", "cart_id", "sku", "title", "quantity", "total_value", "profit", "nicho"]]
+            ultima_venda = ultima_venda_df.to_dict(orient="records")[0] if not ultima_venda_df.empty else None
+
+            # Melhor produto
+            melhor_produto_df = df.groupby("sku").agg({"profit": "sum", "total_value": "sum", "quantity": "sum"}).sort_values("profit", ascending=False).head(1).reset_index()
+            melhor_produto = melhor_produto_df.to_dict(orient="records")[0] if not melhor_produto_df.empty else None
+
+            # Melhor anúncio
+            melhor_anuncio_df = df.groupby("ad").agg({"profit": "sum", "total_value": "sum", "quantity": "sum"}).sort_values("profit", ascending=False).head(1).reset_index()
+            melhor_anuncio = melhor_anuncio_df.to_dict(orient="records")[0] if not melhor_anuncio_df.empty else None
+
+            # Últimas 15 vendas
+            ultimas_15_vendas = df.sort_values("payment_date", ascending=False).head(15)[["payment_date", "order_id", "cart_id", "sku", "title", "quantity", "total_value", "profit", "nicho"]].to_dict(orient="records")
+
+            # Vendas negativas
+            vendas_negativas = df[df["profit"] < 0][["payment_date", "order_id", "cart_id", "sku", "title", "quantity", "total_value", "profit", "nicho"]].to_dict(orient="records")
+
             relatorio_final = {
                 "dia": hoje,
                 "status": "sucesso",
                 "kpis_diarios": kpis_diarios,
                 "analise_por_nicho_dia": por_nicho_dia.to_dict(orient="records"),
-                "timestamp_atualizacao": datetime.now().isoformat()
+                "rankings_diarios": {
+                    "top_nichos": top_nichos_dia,
+                    "top_skus": top_skus_dia
+                },
+                "timestamp_atualizacao": datetime.now().isoformat(),
+                "ultima_venda": ultima_venda,
+                "melhor_produto": melhor_produto,
+                "melhor_anuncio": melhor_anuncio,
+                "ultimas_15_vendas": ultimas_15_vendas,
+                "vendas_negativas": vendas_negativas
             }
 
             return relatorio_final
@@ -100,7 +137,10 @@ class ReportService:
             df = pd.DataFrame(linhas, columns=colunas)
 
             if df.empty:
+                self.logger.warning(f"Nenhum pedido encontrado para o período {data_inicio} a {data_fim}")
                 return {"mensagem": "Nenhum pedido encontrado neste período", "skus_sem_nicho": []}
+
+            self.logger.info(f"DataFrame carregado com {len(df)} pedidos para o período {data_inicio} a {data_fim}")
 
             df["payment_date"] = pd.to_datetime(df["payment_date"], errors="coerce")
 
@@ -113,6 +153,8 @@ class ReportService:
                 df['hour'] = 0
                 df['weekday'] = 0
                 df['month'] = 0
+
+            self.logger.info("Campos de data extraídos (hora, dia da semana, mês)")
 
             def limpar_df_para_json(df: pd.DataFrame) -> pd.DataFrame:
                 return df.fillna(0).replace({pd.NA: 0}).astype(object)
@@ -137,11 +179,13 @@ class ReportService:
                     "impostos_total": float(df["taxes"].sum())
                 },
                 "indices": {
-                    "rentabilidade_media": float(df["rentability"].mean() if not df["rentability"].isna().all() else 0),
-                    "profitabilidade_media": float(df["profitability"].mean() if not df["profitability"].isna().all() else 0)
+                    "rentabilidade_media": float(df["rentability"].fillna(0).mean() if not df["rentability"].isna().all() else 0),
+                    "profitabilidade_media": float(df["profitability"].fillna(0).mean() if not df["profitability"].isna().all() else 0)
                 },
                 "skus_sem_nicho": skus_sem_nicho
             }
+
+            self.logger.info(f"KPIs gerais calculados: faturamento R$ {kpis_gerais['faturamento_total']:.2f}, lucro R$ {kpis_gerais['lucro_liquido_total']:.2f}, {kpis_gerais['total_pedidos']} pedidos")
 
             # ================================
             # 2️⃣ RELATÓRIOS DIÁRIOS
@@ -179,6 +223,8 @@ class ReportService:
                     "nichos": nichos
                 })
 
+            self.logger.info(f"Relatórios diários gerados para {len(relatorios_diarios)} dias")
+
             # ================================
             # 3️⃣ RELATÓRIO POR NICHO GERAL
             # ================================
@@ -210,6 +256,8 @@ class ReportService:
             por_nicho["media_dia_unidades"] = por_nicho["total_unidades"] / dias_totais
             por_nicho = limpar_df_para_json(por_nicho)
 
+            self.logger.info(f"Análise por nicho concluída para {len(por_nicho)} nichos")
+
             # ================================
             # 4️⃣ RELATÓRIO POR SKU
             # ================================
@@ -231,6 +279,8 @@ class ReportService:
                          }))
             por_sku = limpar_df_para_json(por_sku)
 
+            self.logger.info(f"Análise por SKU concluída para {len(por_sku)} SKUs")
+
             # ================================
             # 4.5️⃣ AGREGADOS POR HORA E DIA DA SEMANA
             # ================================
@@ -246,16 +296,22 @@ class ReportService:
                                 .rename(columns={"profit": "lucro_liquido", "total_value": "faturamento", "order_id": "total_pedidos"}))
             por_dia_semana = limpar_df_para_json(por_dia_semana)
 
+            self.logger.info("Agregados por hora e dia da semana calculados")
+
             # ================================
-            # 4.6️⃣ LISTA DE PEDIDOS (TOP 100 PARA PERFORMANCE)
+            # 4.6️⃣ LISTA DE PEDIDOS
             # ================================
-            pedidos_lista = df.sort_values("payment_date", ascending=False).head(100)[["payment_date", "order_id", "cart_id", "sku", "title", "quantity", "total_value", "profit", "nicho"]].to_dict(orient="records")
+            pedidos_lista = df.sort_values("payment_date", ascending=False)[["payment_date", "order_id", "cart_id", "sku", "title", "quantity", "total_value", "profit", "nicho"]].to_dict(orient="records")
+
+            self.logger.info(f"Lista de pedidos gerada com {len(pedidos_lista)} entradas")
 
             # ================================
             # 5️⃣ FORECAST (ML)
             # ================================
             df_forecast, conclusoes = predict_sales_for_df(df)
             df_forecast = limpar_df_para_json(df_forecast)
+
+            self.logger.info("Forecast ML executado com sucesso")
 
             # ================================
             # 6️⃣ RANKINGS
@@ -277,6 +333,14 @@ class ReportService:
                                .head(15)
                                .reset_index())
 
+            # Top SKUs per niche
+            top_skus_per_nicho = {}
+            for nicho in top_por_nicho['nicho'].unique():
+                nicho_skus = top_por_nicho[top_por_nicho['nicho'] == nicho].to_dict(orient="records")
+                top_skus_per_nicho[nicho] = nicho_skus
+
+            self.logger.info(f"Rankings calculados: {len(top_skus)} top SKUs, {len(top_ads)} top anúncios, {len(top_por_nicho)} por nicho, top skus per nicho: {len(top_skus_per_nicho)}")
+
             self.logger.info("Relatório flex gerado com sucesso")
 
             return {
@@ -297,7 +361,8 @@ class ReportService:
                 "rankings": {
                     "top_ads": top_ads.to_dict(orient="records"),
                     "top_skus": top_skus.to_dict(orient="records"),
-                    "top_por_nicho": top_por_nicho.to_dict(orient="records")
+                    "top_por_nicho": top_por_nicho.to_dict(orient="records"),
+                    "top_skus_per_nicho": top_skus_per_nicho
                 },
                 "forecast": {
                     "dados": df_forecast.to_dict(orient="records"),

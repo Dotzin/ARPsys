@@ -13,13 +13,25 @@
 </head>
 <body>
     <header>
-        <h1>Relatórios por Período</h1>
-        <nav>
-            <a href="/static/daily.html">Relatório Diário em Tempo Real</a>
-        </nav>
+        <div class="header-right">
+            <div class="dropdown">
+                <button class="dropbtn">Relatórios</button>
+                <div class="dropdown-content">
+                    <a href="/static/daily.html">Relatório Diário em Tempo Real</a>
+                    <a href="/static/index.html">Relatórios por Período</a>
+                </div>
+            </div>
+            <div class="dropdown">
+                <button class="dropbtn">Ferramentas</button>
+                <div class="dropdown-content">
+                    <a href="/static/ferramentas.html">Gerador GTIN-13/EAN-13</a>
+                </div>
+            </div>
+            <button class="settings-btn" onclick="window.location.href='/static/settings.html'">Configurações</button>
+        </div>
     </header>
 
-    <main>
+    <main class="full-width">
         <section id="form-section">
             <h2>Selecionar Período</h2>
             <form id="report-form">
@@ -30,6 +42,7 @@
                 <input type="date" id="data-fim" name="data_fim" required>
 
                 <button type="submit">Gerar Relatório</button>
+                <button type="button" id="refresh-btn" style="display: none;">Atualizar Gráficos</button>
                 <button type="button" id="export-btn" style="display: none;">Exportar para Excel</button>
             </form>
         </section>
@@ -57,7 +70,7 @@
                     <canvas id="weekday-chart" width="250" height="150"></canvas>
                 </div>
                 <div id="daily-sales-chart-container" class="chart-item">
-                    <h4>Vendas Diárias</h4>
+                    <h4>Lucro Líquido Diário</h4>
                     <canvas id="daily-sales-chart" width="250" height="150"></canvas>
                 </div>
             </div>
@@ -69,16 +82,17 @@
                     <button class="tab-button active" onclick="showTab('forecast')">Previsão</button>
                     <button class="tab-button" onclick="showTab('orders')">Pedidos</button>
                     <button class="tab-button" onclick="showTab('rankings')">Top SKUs</button>
+                    <button class="tab-button" onclick="showTab('top-nichos')">Top Nichos</button>
+                    <button class="tab-button" onclick="showTab('top-ads')">Top Anúncios</button>
                 </div>
                 <div id="forecast-tab" class="tab-content active">
                     <table id="forecast-table" class="display">
                         <thead>
                             <tr>
                                 <th>Data</th>
-                                <th>SKU</th>
-                                <th>Quantidade</th>
-                                <th>Valor Total</th>
-                                <th>Previsão Lucro</th>
+                                <th>Previsão Lucro Diário</th>
+                                <th>Quantidade Total Diária</th>
+                                <th>Valor Total Diário</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -119,6 +133,45 @@
                             <!-- Dados serão inseridos aqui -->
                         </tbody>
                     </table>
+                </div>
+                <div id="top-nichos-tab" class="tab-content">
+                    <table id="top-nichos-table" class="display">
+                        <thead>
+                            <tr>
+                                <th>Nicho</th>
+                                <th>SKU</th>
+                                <th>Lucro Líquido</th>
+                                <th>Lucro Bruto</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Dados serão inseridos aqui -->
+                        </tbody>
+                    </table>
+                </div>
+                <div id="top-ads-tab" class="tab-content">
+                    <table id="top-ads-table" class="display">
+                        <thead>
+                            <tr>
+                                <th>Anúncio</th>
+                                <th>Lucro Líquido</th>
+                                <th>Lucro Bruto</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Dados serão inseridos aqui -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="sku-details-container" style="display: none;">
+                <h3>Top SKUs por Nicho</h3>
+                <div id="sku-tabs">
+                    <!-- Tabs will be generated here -->
+                </div>
+                <div id="sku-tab-content">
+                    <!-- Tab content will be generated here -->
                 </div>
             </div>
         </section>

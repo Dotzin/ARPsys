@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, UploadFile, File
 from fastapi.responses import JSONResponse
 from app.services.sku_nicho_service import SkuNichoInserter
 import logging
+import pandas as pd
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -28,6 +29,23 @@ def inserir_varios_sku_nicho(sku_nicho_lista: list[dict], inserter: SkuNichoInse
     inserter.insert_many(sku_nicho_lista)
     logger.info("Inserção múltipla concluída")
     return {"mensagem": f"{len(sku_nicho_lista)} registros inseridos com sucesso."}
+
+@router.post("/sku_nicho/inserir_xlsx")
+async def inserir_xlsx(file: UploadFile = File(...), inserter: SkuNichoInserter = Depends(get_sku_nicho_inserter)):
+    logger.info(f"Inserindo SKUs de XLSX: {file.filename}")
+    try:
+        df = pd.read_excel(file.file)
+        sku_nicho_lista = df.to_dict(orient='records')
+        for item in sku_nicho_lista:
+            if "sku" not in item or "nicho" not in item:
+                logger.warning(f"Registro inválido no XLSX: {item}")
+                return JSONResponse(status_code=400, content={"erro": "Cada linha deve conter colunas 'sku' e 'nicho'"})
+        inserter.insert_many(sku_nicho_lista)
+        logger.info(f"Inserção de XLSX concluída: {len(sku_nicho_lista)} registros")
+        return {"mensagem": f"{len(sku_nicho_lista)} registros inseridos com sucesso do XLSX."}
+    except Exception as e:
+        logger.exception("Erro ao processar XLSX")
+        return JSONResponse(status_code=500, content={"erro": str(e)})
 
 @router.put("/sku_nicho/atualizar")
 def atualizar_sku_nicho(sku: str, novo_nicho: str, inserter: SkuNichoInserter = Depends(get_sku_nicho_inserter)):

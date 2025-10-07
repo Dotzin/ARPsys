@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Query, Depends, Request
 from fastapi.responses import JSONResponse
-from datetime import datetime
+from datetime import datetime, timedelta
 import asyncio
 from app.services.data_service import Data
 from app.services.data_parser_service import DataParser
@@ -34,16 +34,26 @@ async def atualizar_pedidos(
     logger.info(f"Chamada para /atualizar_pedidos com data={data}")
     try:
         if not data:
-            data_inicio = data_fim = datetime.today().strftime("%Y-%m-%d")
+            # Ajustar para o fuso horário da API (UTC, BRT é UTC-3)
+            # Se hora < 21, enviar hoje, senão amanhã
+            agora = datetime.now()
+            if agora.hour < 21:
+                data_ajustada = agora
+            else:
+                data_ajustada = agora + timedelta(days=1)
+            data_inicio = data_fim = data_ajustada.strftime("%Y-%m-%d")
         else:
             partes = data.split("/")
             if len(partes) == 3:
                 dia, mes, ano = partes
-                data_inicio = data_fim = f"{ano}-{mes}-{dia}"
+                data_ajustada = datetime(int(ano), int(mes), int(dia)) + timedelta(days=1)
+                data_inicio = data_fim = data_ajustada.strftime("%Y-%m-%d")
             elif len(partes) == 6:
                 dia1, mes1, ano1, dia2, mes2, ano2 = partes
-                data_inicio = f"{ano1}-{mes1}-{dia1}"
-                data_fim = f"{ano2}-{mes2}-{dia2}"
+                data_inicio_ajustada = datetime(int(ano1), int(mes1), int(dia1)) + timedelta(days=1)
+                data_fim_ajustada = datetime(int(ano2), int(mes2), int(dia2)) + timedelta(days=1)
+                data_inicio = data_inicio_ajustada.strftime("%Y-%m-%d")
+                data_fim = data_fim_ajustada.strftime("%Y-%m-%d")
             else:
                 logger.warning("Formato de data inválido")
                 return {"erro": "Formato de data inválido. Use DD/MM/YYYY ou DD/MM/YYYY/DD/MM/YYYY."}

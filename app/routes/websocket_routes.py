@@ -15,11 +15,9 @@ def get_report_service(request: Request) -> ReportService:
 
 # Rotas relacionadas a WebSocket
 @router.websocket("/ws/relatorio_diario")
-async def websocket_endpoint(
-    websocket: WebSocket,
-    manager: ConnectionManager = Depends(get_connection_manager),
-    report_service: ReportService = Depends(get_report_service)
-):
+async def websocket_endpoint(websocket: WebSocket):
+    manager = websocket.app.state.connection_manager
+    report_service = websocket.app.state.report_service
     await manager.connect(websocket)
     try:
         # Envia o relatório atual imediatamente após a conexão

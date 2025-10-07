@@ -1,13 +1,34 @@
 document.addEventListener('DOMContentLoaded', function() {
+    // Apply theme
+    const theme = localStorage.getItem('theme') || 'light';
+    document.body.className = theme;
+
     const form = document.getElementById('report-form');
     const resultsSection = document.getElementById('results-section');
     const forecastTableBody = document.querySelector('#forecast-table tbody');
 
     // Initialize DataTables after data is loaded
     function initDataTables() {
+        if ($.fn.DataTable.isDataTable('#forecast-table')) {
+            $('#forecast-table').DataTable().destroy();
+        }
+        if ($.fn.DataTable.isDataTable('#orders-table')) {
+            $('#orders-table').DataTable().destroy();
+        }
+        if ($.fn.DataTable.isDataTable('#rankings-table')) {
+            $('#rankings-table').DataTable().destroy();
+        }
+        if ($.fn.DataTable.isDataTable('#top-nichos-table')) {
+            $('#top-nichos-table').DataTable().destroy();
+        }
+        if ($.fn.DataTable.isDataTable('#top-ads-table')) {
+            $('#top-ads-table').DataTable().destroy();
+        }
         $('#forecast-table').DataTable();
         $('#orders-table').DataTable();
         $('#rankings-table').DataTable();
+        $('#top-nichos-table').DataTable();
+        $('#top-ads-table').DataTable();
     }
 
     // Tab switching
@@ -20,9 +41,47 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById(tabName + '-tab').classList.add('active');
         event.target.classList.add('active');
     }
+
+
     const exportBtn = document.getElementById('export-btn');
+    const refreshBtn = document.getElementById('refresh-btn');
 
     let reportData = null;
+    let currentDataInicio = null;
+    let currentDataFim = null;
+
+    // Chart instances stored on window
+
+    async function loadAndRenderReport(dataInicio, dataFim) {
+        const response = await fetch(`/relatorio_flex?data_inicio=${dataInicio}&data_fim=${dataFim}`);
+        if (!response.ok) {
+            throw new Error('Erro ao buscar relatório');
+        }
+        reportData = await response.json();
+
+        renderKPIs(reportData.kpis_gerais);
+        renderForecastTable(reportData.forecast.dados);
+        renderNichoChart(reportData.relatorios.por_nicho);
+        renderHourChart(reportData.relatorios.por_hora);
+        renderWeekdayChart(reportData.relatorios.por_dia_semana);
+        renderDailySalesChart(reportData.relatorios.diario);
+        renderRankings(reportData.rankings.top_skus);
+        renderTopNichos(reportData.rankings.top_por_nicho);
+        renderTopAds(reportData.rankings.top_ads);
+        renderOrdersTable(reportData.relatorios.pedidos_lista);
+        renderSkuDetails(reportData.rankings.top_skus_per_nicho);
+
+        resultsSection.style.display = 'block';
+        refreshBtn.style.display = 'inline-block';
+        exportBtn.style.display = 'inline-block';
+        document.getElementById('sku-details-container').style.display = 'block';
+
+        currentDataInicio = dataInicio;
+        currentDataFim = dataFim;
+
+        // Initialize DataTables after rendering
+        setTimeout(initDataTables, 100);
+    }
 
     form.addEventListener('submit', async function(e) {
         e.preventDefault();
@@ -36,73 +95,29 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         try {
-            const response = await fetch(`/relatorio_flex?data_inicio=${dataInicio}&data_fim=${dataFim}`);
-            if (!response.ok) {
-                throw new Error('Erro ao buscar relatório');
-            }
-            reportData = await response.json();
-
-            renderKPIs(reportData.kpis_gerais);
-            renderForecastTable(reportData.forecast.dados);
-            renderNichoChart(reportData.relatorios.por_nicho);
-            renderHourChart(reportData.relatorios.por_hora);
-            renderWeekdayChart(reportData.relatorios.por_dia_semana);
-            renderDailySalesChart(reportData.relatorios.diario);
-            renderRankings(reportData.rankings.top_skus);
-            renderOrdersTable(reportData.relatorios.pedidos_lista);
-
-            resultsSection.style.display = 'block';
-            document.getElementById('export-btn').style.display = 'inline-block';
-
-            // Initialize DataTables after rendering
-            setTimeout(initDataTables, 100);
+            await loadAndRenderReport(dataInicio, dataFim);
         } catch (error) {
             console.error('Erro:', error);
             alert('Erro ao gerar relatório: ' + error.message);
         }
     });
 
-    exportBtn.addEventListener('click', function() {
-        if (!reportData) {
+    refreshBtn.addEventListener('click', async function() {
+        if (!currentDataInicio || !currentDataFim) {
             alert('Gere um relatório primeiro.');
             return;
         }
 
-        const wb = XLSX.utils.book_new();
+        try {
+            await loadAndRenderReport(currentDataInicio, currentDataFim);
+        } catch (error) {
+            console.error('Erro ao atualizar relatório:', error);
+            alert('Erro ao atualizar relatório: ' + error.message);
+        }
+    });
 
-        // Sheet 1: KPIs
-        const kpisWS = XLSX.utils.json_to_sheet([reportData.kpis_gerais]);
-        XLSX.utils.book_append_sheet(wb, kpisWS, 'KPIs');
-
-        // Sheet 2: Forecast
-        const forecastWS = XLSX.utils.json_to_sheet(reportData.forecast.dados);
-        XLSX.utils.book_append_sheet(wb, forecastWS, 'Previsao');
-
-        // Sheet 3: Nicho
-        const nichoWS = XLSX.utils.json_to_sheet(reportData.relatorios.por_nicho);
-        XLSX.utils.book_append_sheet(wb, nichoWS, 'Nicho');
-
-        // Sheet 4: Por Hora
-        const horaWS = XLSX.utils.json_to_sheet(reportData.relatorios.por_hora);
-        XLSX.utils.book_append_sheet(wb, horaWS, 'Por_Hora');
-
-        // Sheet 5: Por Dia Semana
-        const diaSemanaWS = XLSX.utils.json_to_sheet(reportData.relatorios.por_dia_semana);
-        XLSX.utils.book_append_sheet(wb, diaSemanaWS, 'Por_Dia_Semana');
-
-        // Sheet 6: Diário
-        const diarioWS = XLSX.utils.json_to_sheet(reportData.relatorios.diario);
-        XLSX.utils.book_append_sheet(wb, diarioWS, 'Diario');
-
-        // Sheet 7: Rankings
-        const rankingsWS = XLSX.utils.json_to_sheet(reportData.rankings.top_skus);
-        XLSX.utils.book_append_sheet(wb, rankingsWS, 'Top_SKUs');
-
-        // Sheet 8: Pedidos
-        const pedidosWS = XLSX.utils.json_to_sheet(reportData.relatorios.pedidos_lista);
-        XLSX.utils.book_append_sheet(wb, pedidosWS, 'Pedidos');
-
-        XLSX.writeFile(wb, 'relatorio_flex.xlsx');
+    exportBtn.addEventListener('click', function() {
+        alert('Função não implementada');
     });
 
     function renderForecastTable(forecast) {
@@ -110,11 +125,10 @@ document.addEventListener('DOMContentLoaded', function() {
         forecast.forEach(item => {
             const row = document.createElement('tr');
             row.innerHTML = `
-                <td>${item.payment_date}</td>
-                <td>${item.sku}</td>
-                <td>${item.quantity}</td>
-                <td>${item.total_value}</td>
-                <td>${item.forecast_lucro_liquido_next}</td>
+                <td>${new Date(item.payment_date).toLocaleDateString()}</td>
+                <td>R$ ${item.previsao_lucro_diario.toFixed(2)}</td>
+                <td>${item.quantidade_total_diaria}</td>
+                <td>R$ ${item.valor_total_diario.toFixed(2)}</td>
             `;
             forecastTableBody.appendChild(row);
         });
@@ -134,9 +148,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function renderNichoChart(porNicho) {
         const ctx = document.getElementById('nicho-chart').getContext('2d');
+        // Destroy existing chart if it exists
+        if (window.nichoChart) {
+            window.nichoChart.destroy();
+        }
         const labels = porNicho.map(item => item.nicho || 'Sem nicho');
         const data = porNicho.map(item => item.lucro_liquido);
-        new Chart(ctx, {
+        const isDark = document.body.classList.contains('dark');
+        window.nichoChart = new Chart(ctx, {
             type: 'bar',
             data: {
                 labels: labels,
@@ -153,7 +172,21 @@ document.addEventListener('DOMContentLoaded', function() {
                 maintainAspectRatio: false,
                 scales: {
                     y: {
-                        beginAtZero: true
+                        beginAtZero: true,
+                        ticks: {
+                            color: isDark ? '#ffffff' : '#333'
+                        },
+                        grid: {
+                            color: isDark ? '#444' : '#ddd'
+                        }
+                    },
+                    x: {
+                        ticks: {
+                            color: isDark ? '#ffffff' : '#333'
+                        },
+                        grid: {
+                            color: isDark ? '#444' : '#ddd'
+                        }
                     }
                 },
                 plugins: {
@@ -167,9 +200,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function renderHourChart(porHora) {
         const ctx = document.getElementById('hour-chart').getContext('2d');
+        // Destroy existing chart if it exists
+        if (window.hourChart) {
+            window.hourChart.destroy();
+        }
         const labels = porHora.map(item => `${item.hour}h`);
         const data = porHora.map(item => item.lucro_liquido);
-        new Chart(ctx, {
+        window.hourChart = new Chart(ctx, {
             type: 'line',
             data: {
                 labels: labels,
@@ -200,10 +237,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function renderWeekdayChart(porDiaSemana) {
         const ctx = document.getElementById('weekday-chart').getContext('2d');
-        const weekdays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+        // Destroy existing chart if it exists
+        if (window.weekdayChart) {
+            window.weekdayChart.destroy();
+        }
+        const weekdays = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
         const labels = porDiaSemana.map(item => weekdays[item.weekday] || item.weekday);
         const data = porDiaSemana.map(item => item.lucro_liquido);
-        new Chart(ctx, {
+        window.weekdayChart = new Chart(ctx, {
             type: 'bar',
             data: {
                 labels: labels,
@@ -234,14 +275,18 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function renderDailySalesChart(diario) {
         const ctx = document.getElementById('daily-sales-chart').getContext('2d');
+        // Destroy existing chart if it exists
+        if (window.dailySalesChart) {
+            window.dailySalesChart.destroy();
+        }
         const labels = diario.map(item => item.data);
-        const data = diario.map(item => item.resumo.faturamento);
-        new Chart(ctx, {
+        const data = diario.map(item => item.resumo.lucro_liquido);
+        window.dailySalesChart = new Chart(ctx, {
             type: 'bar',
             data: {
                 labels: labels,
                 datasets: [{
-                    label: 'Faturamento',
+                    label: 'Lucro Líquido',
                     data: data,
                     backgroundColor: 'rgba(75, 192, 192, 0.5)',
                     borderColor: 'rgba(75, 192, 192, 1)',
@@ -289,7 +334,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 <td>${item.order_id || ''}</td>
                 <td>${item.cart_id || ''}</td>
                 <td>${item.sku}</td>
-                <td>${item.title}</td>
+                <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${item.title}</td>
                 <td>${item.quantity}</td>
                 <td>R$ ${item.total_value.toFixed(2)}</td>
                 <td>R$ ${item.profit.toFixed(2)}</td>
@@ -297,5 +342,93 @@ document.addEventListener('DOMContentLoaded', function() {
             `;
             tbody.appendChild(row);
         });
+    }
+
+    function renderTopNichos(topPorNicho) {
+        const tbody = document.querySelector('#top-nichos-table tbody');
+        tbody.innerHTML = '';
+        topPorNicho.forEach(item => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${item.nicho}</td>
+                <td>${item.sku}</td>
+                <td>R$ ${item.profit.toFixed(2)}</td>
+                <td>R$ ${item.gross_profit.toFixed(2)}</td>
+            `;
+            tbody.appendChild(row);
+        });
+    }
+
+    function renderTopAds(topAds) {
+        const tbody = document.querySelector('#top-ads-table tbody');
+        tbody.innerHTML = '';
+        topAds.slice(0, 30).forEach(item => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${item.ad}</td>
+                <td>R$ ${item.profit.toFixed(2)}</td>
+                <td>R$ ${item.gross_profit.toFixed(2)}</td>
+            `;
+            tbody.appendChild(row);
+        });
+    }
+
+    function renderSkuDetails(topSkusPerNicho) {
+        const tabsContainer = document.getElementById('sku-tabs');
+        const contentContainer = document.getElementById('sku-tab-content');
+        tabsContainer.innerHTML = '';
+        contentContainer.innerHTML = '';
+
+        const nichos = Object.keys(topSkusPerNicho);
+        nichos.forEach((nicho, index) => {
+            const skus = topSkusPerNicho[nicho] || [];
+
+            // Create tab button
+            const tabButton = document.createElement('button');
+            tabButton.className = 'sku-tab-button';
+            tabButton.textContent = nicho;
+            tabButton.onclick = () => showSkuTab(nicho);
+            if (index === 0) tabButton.classList.add('active');
+            tabsContainer.appendChild(tabButton);
+
+            // Create tab content
+            const tabContent = document.createElement('div');
+            tabContent.id = `sku-${nicho}`;
+            tabContent.className = 'sku-tab-content';
+            if (index === 0) tabContent.classList.add('active');
+
+            const table = document.createElement('table');
+            table.className = 'display';
+            table.innerHTML = `
+                <thead>
+                    <tr>
+                        <th>SKU</th>
+                        <th>Lucro Líquido</th>
+                        <th>Lucro Bruto</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${skus.map(sku => `
+                        <tr>
+                            <td>${sku.sku}</td>
+                            <td>R$ ${sku.profit.toFixed(2)}</td>
+                            <td>R$ ${sku.gross_profit.toFixed(2)}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            `;
+            tabContent.appendChild(table);
+            contentContainer.appendChild(tabContent);
+
+            // Initialize DataTable
+            $(table).DataTable();
+        });
+    }
+
+    window.showSkuTab = function(nicho) {
+        document.querySelectorAll('.sku-tab-content').forEach(content => content.classList.remove('active'));
+        document.querySelectorAll('.sku-tab-button').forEach(button => button.classList.remove('active'));
+        document.getElementById(`sku-${nicho}`).classList.add('active');
+        event.target.classList.add('active');
     }
 });
