@@ -1,40 +1,28 @@
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 from datetime import datetime, timedelta
 import asyncio
-import os
 from app.services.data_service import Data
 from app.services.data_parser_service import DataParser
 from app.services.order_service import OrderInserter
 from app.services.report_service import ReportService
 from app.core.connection_manager import ConnectionManager
 from app.models import DateRangeQuery, ReportQuery
+from app.config.settings import settings
+from app.core.container import container
 import logging
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-# Dependency injection for services
-def get_order_inserter(request: Request) -> OrderInserter:
-    return request.app.state.order_inserter
-
-
-def get_report_service(request: Request) -> ReportService:
-    return request.app.state.report_service
-
-
-def get_connection_manager(request: Request) -> ConnectionManager:
-    return request.app.state.connection_manager
-
-
 # ROUTE: Update orders from API (With Broadcast)
 @router.post("/atualizar_pedidos")
 async def atualizar_pedidos(
     query: DateRangeQuery = Depends(),
-    inserter: OrderInserter = Depends(get_order_inserter),
-    report_service: ReportService = Depends(get_report_service),
-    manager: ConnectionManager = Depends(get_connection_manager),
+    inserter: OrderInserter = Depends(lambda: container.order_inserter()),
+    report_service: ReportService = Depends(lambda: container.report_service()),
+    manager: ConnectionManager = Depends(lambda: container.connection_manager()),
 ):
     logger.info(f"Chamada para /atualizar_pedidos com data={query.data}")
     try:
@@ -79,9 +67,7 @@ async def atualizar_pedidos(
         )
         logger.info(f"URL gerada para API externa: {url}")
 
-        session_token = os.getenv("API_SESSION_TOKEN")
-        if not session_token:
-            raise ValueError("API_SESSION_TOKEN not set in environment variables")
+        session_token = settings.api_session_token
         data_obj = Data(url, {"session": session_token})
         raw_json = data_obj.get_data()
         logger.info(f"Dados brutos obtidos: {len(raw_json)} registros")
@@ -120,7 +106,7 @@ async def atualizar_pedidos(
 @router.get("/relatorio_flex")
 def relatorio_flex(
     query: ReportQuery = Depends(),
-    report_service: ReportService = Depends(get_report_service),
+    report_service: ReportService = Depends(lambda: container.report_service()),
 ):
     try:
         return report_service.generate_relatorio_flex(query.data_inicio, query.data_fim)

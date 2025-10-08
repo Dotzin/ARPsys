@@ -1,11 +1,11 @@
 import asyncio
 import logging
-import os
 from datetime import datetime, timedelta
 from app.core.connection_manager import ConnectionManager
 from app.services.data_service import Data
 from app.services.data_parser_service import DataParser
 from app.services.order_service import OrderInserter
+from app.config.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -38,11 +38,7 @@ class BackgroundTaskService:
                     logger.info(f"Data ajustada para requisição: {data_inicio}")
                     url = f"https://app.arpcommerce.com.br/sells?r={data_inicio}"
                     logger.info(f"Fazendo requisição para URL: {url}")
-                    session_token = os.getenv("API_SESSION_TOKEN")
-                    if not session_token:
-                        raise ValueError(
-                            "API_SESSION_TOKEN not set in environment variables"
-                        )
+                    session_token = settings.api_session_token
                     headers = {"session": session_token}
 
                     data_obj = Data(url, headers)
@@ -56,7 +52,7 @@ class BackgroundTaskService:
                     logger.info(f"Pedidos parseados: {len(pedidos)} pedidos")
 
                     # Database insertion
-                    self.app.state.order_inserter.insert_orders(pedidos)
+                    self.app.state.container.order_inserter().insert_orders(pedidos)
                     logger.info(
                         f"Update cycle: {len(pedidos)} orders inserted/updated in DB."
                     )

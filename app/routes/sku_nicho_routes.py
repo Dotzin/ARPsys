@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, Request, UploadFile, File
+from fastapi import APIRouter, Depends, UploadFile, File
 from fastapi.responses import JSONResponse
 from app.services.sku_nicho_service import SkuNichoInserter
+from app.core.container import container
 import logging
 import pandas as pd
 
@@ -8,15 +9,10 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-# Dependency injection for services
-def get_sku_nicho_inserter(request: Request) -> SkuNichoInserter:
-    return request.app.state.sku_nicho_inserter
-
-
 # Rotas relacionadas a SKU/Nicho
 @router.post("/sku_nicho/inserir")
 def inserir_sku_nicho(
-    sku: str, nicho: str, inserter: SkuNichoInserter = Depends(get_sku_nicho_inserter)
+    sku: str, nicho: str, inserter: SkuNichoInserter = Depends(lambda: container.sku_nicho_inserter())
 ):
     logger.info(f"Inserindo SKU {sku} no nicho {nicho}")
     inserter.insert_one(sku, nicho)
@@ -27,7 +23,7 @@ def inserir_sku_nicho(
 @router.post("/sku_nicho/inserir_varios")
 def inserir_varios_sku_nicho(
     sku_nicho_lista: list[dict],
-    inserter: SkuNichoInserter = Depends(get_sku_nicho_inserter),
+    inserter: SkuNichoInserter = Depends(lambda: container.sku_nicho_inserter()),
 ):
     logger.info(f"Inserindo {len(sku_nicho_lista)} registros de SKU/nicho")
     for item in sku_nicho_lista:
@@ -45,7 +41,7 @@ def inserir_varios_sku_nicho(
 @router.post("/sku_nicho/inserir_xlsx")
 async def inserir_xlsx(
     file: UploadFile = File(...),
-    inserter: SkuNichoInserter = Depends(get_sku_nicho_inserter),
+    inserter: SkuNichoInserter = Depends(lambda: container.sku_nicho_inserter()),
 ):
     logger.info(f"Inserindo SKUs de XLSX: {file.filename}")
     try:
@@ -72,7 +68,7 @@ async def inserir_xlsx(
 def atualizar_sku_nicho(
     sku: str,
     novo_nicho: str,
-    inserter: SkuNichoInserter = Depends(get_sku_nicho_inserter),
+    inserter: SkuNichoInserter = Depends(lambda: container.sku_nicho_inserter()),
 ):
     logger.info(f"Atualizando SKU {sku} para nicho {novo_nicho}")
     atualizados = inserter.update_nicho(sku, novo_nicho)
@@ -82,7 +78,7 @@ def atualizar_sku_nicho(
 
 @router.delete("/sku_nicho/deletar")
 def deletar_sku_nicho(
-    sku: str, inserter: SkuNichoInserter = Depends(get_sku_nicho_inserter)
+    sku: str, inserter: SkuNichoInserter = Depends(lambda: container.sku_nicho_inserter())
 ):
     logger.info(f"Deletando SKU {sku}")
     deletados = inserter.delete_sku(sku)
@@ -91,7 +87,7 @@ def deletar_sku_nicho(
 
 
 @router.get("/sku_nicho/listar")
-def listar_sku_nicho(inserter: SkuNichoInserter = Depends(get_sku_nicho_inserter)):
+def listar_sku_nicho(inserter: SkuNichoInserter = Depends(lambda: container.sku_nicho_inserter())):
     logger.info("Listando todos os SKU/nichos")
     rows = inserter.list_all()
     logger.info(f"{len(rows)} registros retornados")

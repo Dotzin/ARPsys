@@ -13,3 +13,6 @@ python-dotenv
 black
 flake8
 mypy
+dependency-injector
+tenacity
+python-multipart

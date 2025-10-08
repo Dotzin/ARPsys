@@ -5,22 +5,15 @@ from app.routes.relatorio_routes import router as relatorio_router
 from app.routes.orders_routes import router as orders_router
 from app.routes.sku_nicho_routes import router as sku_nicho_router
 from app.routes.websocket_routes import router as websocket_router
-from app.services.database_service import DatabaseService
-from app.services.report_service import ReportService
-from app.services.order_service import OrderInserter
-from app.services.sku_nicho_service import SkuNichoInserter
-from app.core.connection_manager import ConnectionManager
+from app.core.container import Container
+from app.config.settings import settings
 from app.background_tasks.periodic_report_task import BackgroundTaskService
-import os
+from dependency_injector import providers
 import logging
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv()
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=getattr(logging, settings.log_level.upper()), format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 
 logger = logging.getLogger(__name__)
@@ -50,7 +43,7 @@ def create_app() -> FastAPI:
     """
     Create and configure the FastAPI application.
 
-    This function initializes all services, sets up dependency injection,
+    This function initializes all services using dependency injection,
     mounts static files, and includes all routers.
 
     Returns:
@@ -61,39 +54,43 @@ def create_app() -> FastAPI:
     # Mount static files
     app.mount("/static", StaticFiles(directory="static"), name="static")
 
-    # Initialize database service
-    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    db_path = os.path.join(BASE_DIR, "database.db")
-    database_service = DatabaseService(db_path)
+    # Initialize dependency container
+    container = Container()
+    container.wire(modules=[
+        "app.routes.relatorio_routes",
+        "app.routes.orders_routes",
+        "app.routes.sku_nicho_routes",
+        "app.routes.websocket_routes",
+    ])
+
+    # Override providers that need app instance
+    container.background_task_service.override(
+        providers.Singleton(
+            BackgroundTaskService,
+            app=providers.Object(app),
+            manager=container.connection_manager(),
+            report_service=container.report_service(),
+            update_interval_seconds=settings.report_update_interval,
+        )
+    )
+
+    # Get services from container
+    database_service = container.database_service()
     database_service.connect()
     database_service.create_tables()
 
-    # Initialize services
-    report_service = ReportService(database_service.database)
-    order_inserter = OrderInserter(database_service.database)
-    sku_nicho_inserter = SkuNichoInserter(database_service.database)
-    connection_manager = ConnectionManager(logger)
+    # Get background task service and store in app state
+    background_task_service = container.background_task_service()
+    app.state.background_task_service = background_task_service
 
-    # Store services in app state for dependency injection
-    app.state.database_service = database_service
-    app.state.report_service = report_service
-    app.state.order_inserter = order_inserter
-    app.state.sku_nicho_inserter = sku_nicho_inserter
-    app.state.connection_manager = connection_manager
-
-    # Services are now injected via app.state in dependency functions
+    # Store container in app state for access if needed
+    app.state.container = container
 
     # Include routers
     app.include_router(relatorio_router)
     app.include_router(orders_router)
     app.include_router(sku_nicho_router)
     app.include_router(websocket_router)
-
-    # Initialize background task service (will be started in lifespan)
-    background_task_service = BackgroundTaskService(
-        app, connection_manager, report_service
-    )
-    app.state.background_task_service = background_task_service
 
     logger.info("App criado e configurado com sucesso")
     return app

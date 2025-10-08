@@ -1,6 +1,8 @@
 import requests
 import logging
 from typing import Optional, Any, Dict
+from app.core.exceptions import APIException
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 
 class Data:
@@ -10,6 +12,12 @@ class Data:
         self.logger = logging.getLogger(__name__)
         self.logger.info(f"Data inicializado com URL: {self.url}")
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=4, max=10),
+        retry=retry_if_exception_type(requests.RequestException),
+        reraise=True
+    )
     def get_data(self) -> Dict[str, Any]:
         try:
             self.logger.info(f"Fazendo requisição GET para {self.url}")
@@ -21,4 +29,4 @@ class Data:
             return response.json()
         except requests.RequestException as e:
             self.logger.exception(f"Erro ao fazer requisição para {self.url}: {e}")
-            raise
+            raise APIException(f"Failed to fetch data from {self.url}: {e}") from e

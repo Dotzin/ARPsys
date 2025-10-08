@@ -2,6 +2,7 @@ import sqlite3
 import logging
 from threading import Lock
 from typing import Dict, Type, Any, Optional
+from app.core.exceptions import DatabaseException
 
 
 class SingletonMeta(type):
@@ -31,7 +32,7 @@ class Database(metaclass=SingletonMeta):
             self.logger.info("Conexão com o banco de dados estabelecida")
         except sqlite3.Error as e:
             self.logger.exception(f"Erro ao conectar ao banco de dados: {e}")
-            raise
+            raise DatabaseException(f"Failed to connect to database: {e}") from e
 
     def commit(self):
         try:
@@ -40,7 +41,7 @@ class Database(metaclass=SingletonMeta):
             self.logger.info("Commit realizado com sucesso")
         except sqlite3.Error as e:
             self.logger.exception(f"Erro ao executar commit: {e}")
-            raise
+            raise DatabaseException(f"Failed to commit database transaction: {e}") from e
 
     def close(self):
         try:
@@ -49,7 +50,7 @@ class Database(metaclass=SingletonMeta):
                 self.logger.info("Conexão com o banco de dados fechada")
         except sqlite3.Error as e:
             self.logger.exception(f"Erro ao fechar conexão com o banco de dados: {e}")
-            raise
+            raise DatabaseException(f"Failed to close database connection: {e}") from e
 
 
 class TableCreator:
@@ -90,7 +91,7 @@ class TableCreator:
             self.logger.info("Tabela 'orders' criada ou já existente")
         except sqlite3.Error as e:
             self.logger.exception(f"Erro ao criar tabela 'orders': {e}")
-            raise
+            raise DatabaseException(f"Failed to create orders table: {e}") from e
 
     def create_sku_nichos_table(self):
         try:
@@ -108,4 +109,4 @@ class TableCreator:
             self.logger.info("Tabela 'sku_nichos' criada ou já existente")
         except sqlite3.Error as e:
             self.logger.exception(f"Erro ao criar tabela 'sku_nichos': {e}")
-            raise
+            raise DatabaseException(f"Failed to create sku_nichos table: {e}") from e

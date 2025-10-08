@@ -1,26 +1,18 @@
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, Request
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from app.core.connection_manager import ConnectionManager
 from app.services.report_service import ReportService
+from app.core.container import container
 import logging
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-# Dependency injection for services
-def get_connection_manager(request: Request) -> ConnectionManager:
-    return request.app.state.connection_manager
-
-
-def get_report_service(request: Request) -> ReportService:
-    return request.app.state.report_service
-
-
 # Rotas relacionadas a WebSocket
 @router.websocket("/ws/relatorio_diario")
 async def websocket_endpoint(websocket: WebSocket):
-    manager = websocket.app.state.connection_manager
-    report_service = websocket.app.state.report_service
+    manager = container.connection_manager()
+    report_service = container.report_service()
     await manager.connect(websocket)
     try:
         # Envia o relatório atual imediatamente após a conexão

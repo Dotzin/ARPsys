@@ -1,4 +1,5 @@
 import logging
+from app.core.exceptions import ValidationException
 
 class DataParser:
     def __init__(self, raw_data: dict):
@@ -62,5 +63,5 @@ class DataParser:
             self.logger.info(f"Parse concluído: {total_orders} pedidos extraídos")
         except Exception as e:
             self.logger.exception(f"Erro ao parsear pedidos: {e}")
-            raise
+            raise ValidationException(f"Failed to parse order data: {e}") from e
         return orders_list

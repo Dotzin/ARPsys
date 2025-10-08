@@ -1,22 +1,18 @@
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 from datetime import datetime
 import pandas as pd
 from app.repositories.database_repository import Database
+from app.core.container import container
 import logging
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-# Dependency injection for services
-def get_database(request: Request) -> Database:
-    return request.app.state.database_service.database
-
-
 # Rotas relacionadas a pedidos
 @router.get("/orders")
-def listar_orders(database: Database = Depends(get_database)):
+def listar_orders(database: Database = Depends(lambda: container.database())):
     logger.info("Listando todos os pedidos da tabela orders")
     try:
         db = database
@@ -39,7 +35,7 @@ def listar_orders(database: Database = Depends(get_database)):
 
 @router.get("/orders/periodo")
 def listar_orders_periodo(
-    data_inicio: str, data_fim: str, database: Database = Depends(get_database)
+    database: Database = Depends(lambda: container.database())
 ):
     logger.info(f"Listando pedidos entre {data_inicio} e {data_fim}")
     try:
