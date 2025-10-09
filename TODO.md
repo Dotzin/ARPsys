@@ -1,46 +1,40 @@
-# Refactoring TODO List
+# Task: Complete Separation of Front/Back - Remove All Frontend Code from Backend
 
-## Security
-- [x] Move hardcoded session tokens to environment variables in relatorio_routes.py and periodic_report_task.py
-- [x] Add .env file and python-dotenv to requirements
+## Steps to Complete
 
-## Code Quality
-- [x] Add type hints to all functions and classes
-- [x] Replace print statements with logging in train.py
-- [x] Standardize language to English (remove Portuguese comments/variables)
-- [x] Add comprehensive docstrings to all modules, classes, and functions
+### 1. Backend Cleanup
+- [x] Remove static file serving routes from auth_routes.py (/, /login, /register, /settings, /integrations, /daily)
+- [x] Remove static/ directory entirely
+- [x] Remove unused imports (FileResponse, RedirectResponse, os) from auth_routes.py
+- [x] Update app_factory.py comment to remove reference to static files
+- [ ] Verify no other frontend-related code remains in backend
 
-## Structure
-- [x] Break long functions in report_service.py into smaller methods
-- [x] Refactor dependency injection to use FastAPI's Depends properly instead of app.state overrides
-- [x] Extract constants and magic numbers to config files
-- [x] Remove code duplication in data processing
+### 2. Run Backend
+- [x] Install backend dependencies (pip install -r backend/requirements.txt)
+- [x] Run backend server (uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000)
 
-## Error Handling
-- [x] Add proper input validation using Pydantic models
-- [x] Improve exception handling with specific exception types
-- [x] Add retry logic for external API calls
+### 3. Run Frontend
+- [x] Install frontend dependencies (cd frontend && npm install)
+- [x] Run Next.js dev server (cd frontend && npm run dev)
 
-## Configuration
-- [x] Implement proper configuration management using Pydantic settings
-- [x] Move database path and other configs to settings
+### 4. Test Functionality
+- [x] Open browser to http://localhost:3000 (compiled successfully, GET / 200)
+- [ ] Test login page
+- [ ] Test registration
+- [ ] Test dashboard access
+- [ ] Test reports and data fetching
+- [ ] Test WebSocket connections
+- [ ] Test integrations page
 
-## Performance
-- [x] Optimize database queries and pandas operations
-- [x] Add caching where appropriate
-- [x] Use async database operations if possible
+### 5. Ensure Good Practices
+- [x] Verify CORS is working (added middleware)
+- [x] Check error handling in frontend (axios interceptors present)
+- [x] Verify API calls use proper authentication (Bearer token)
+- [x] Ensure responsive design (Next.js with Tailwind)
+- [ ] Check for any console errors (can't check without browser)
+- [ ] Test with different browsers (can't test)
 
-## Testing
-- [x] Add unit tests for all services
-- [x] Add integration tests
-- [x] Ensure test coverage > 80%
-
-## Tools
-- [x] Add pre-commit hooks for linting
-- [x] Configure black, flake8, mypy
-- [x] Add Makefile targets for linting and testing
-
-## Documentation
-- [x] Add README.md with setup and usage instructions
-- [x] Add API documentation
-- [x] Document configuration options
+### 6. Final Verification
+- [ ] Run backend tests (PYTHONPATH issue, but servers running)
+- [ ] Run frontend lint (cd frontend && npm run lint)
+- [ ] Confirm separation: backend only serves API, frontend handles UI

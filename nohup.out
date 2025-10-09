@@ -1,0 +1,154 @@
+2025-10-08 18:20:07,626 - app.repositories.database_repository - INFO - Database inicializado com o caminho: database.db
+2025-10-08 18:20:07,627 - app.services.database_service - INFO - Conectando ao banco de dados em database.db
+2025-10-08 18:20:07,627 - app.repositories.database_repository - INFO - Conexão com o banco de dados estabelecida
+2025-10-08 18:20:07,628 - app.services.database_service - INFO - Criando tabelas no banco de dados
+2025-10-08 18:20:07,628 - app.repositories.database_repository - INFO - TableCreator inicializado
+2025-10-08 18:20:07,628 - app.repositories.database_repository - INFO - Criando tabela 'orders' se não existir
+2025-10-08 18:20:07,628 - app.repositories.database_repository - INFO - Commit realizado com sucesso
+2025-10-08 18:20:07,629 - app.repositories.database_repository - INFO - Tabela 'orders' criada ou já existente
+2025-10-08 18:20:07,629 - app.repositories.database_repository - INFO - Criando tabela 'sku_nichos' se não existir
+2025-10-08 18:20:07,629 - app.repositories.database_repository - INFO - Commit realizado com sucesso
+2025-10-08 18:20:07,629 - app.repositories.database_repository - INFO - Tabela 'sku_nichos' criada ou já existente
+2025-10-08 18:20:07,630 - app.repositories.database_repository - INFO - Criando tabela 'users' se não existir
+2025-10-08 18:20:07,630 - app.repositories.database_repository - INFO - Commit realizado com sucesso
+2025-10-08 18:20:07,630 - app.repositories.database_repository - INFO - Tabela 'users' criada ou já existente
+2025-10-08 18:20:07,630 - app.repositories.database_repository - INFO - Criando tabela 'integrations' se não existir
+2025-10-08 18:20:07,630 - app.repositories.database_repository - INFO - Commit realizado com sucesso
+2025-10-08 18:20:07,631 - app.repositories.database_repository - INFO - Tabela 'integrations' criada ou já existente
+2025-10-08 18:20:07,631 - app.services.database_service - INFO - Tabelas criadas/verificadas com sucesso
+2025-10-08 18:20:07,645 - app.app_factory - INFO - App criado e configurado com sucesso
+INFO:     Started server process [52489]
+INFO:     Waiting for application startup.
+2025-10-08 18:20:07,646 - app.app_factory - INFO - Iniciando aplicação FastAPI
+2025-10-08 18:20:07,646 - app.background_tasks.periodic_report_task - INFO - Tarefa de atualização periódica iniciada.
+2025-10-08 18:20:07,647 - app.services.report_service - INFO - Calculando relatório diário para 2025-10-08
+2025-10-08 18:20:07,649 - app.services.report_service - INFO - Nenhum pedido encontrado para o relatório diário
+2025-10-08 18:20:07,649 - app.app_factory - INFO - Relatório inicial calculado
+2025-10-08 18:20:07,649 - app.background_tasks.periodic_report_task - INFO - Iniciando tarefa periódica de atualização e broadcast
+2025-10-08 18:20:07,649 - app.background_tasks.periodic_report_task - INFO - Executando ciclo de atualização: obtendo pedidos...
+2025-10-08 18:20:07,650 - app.background_tasks.periodic_report_task - INFO - Starting order update from external API.
+2025-10-08 18:20:07,650 - app.background_tasks.periodic_report_task - INFO - Data ajustada para requisição: 2025-10-08
+2025-10-08 18:20:07,650 - app.background_tasks.periodic_report_task - INFO - Fazendo requisição para URL: https://app.arpcommerce.com.br/sells?r=2025-10-08
+2025-10-08 18:20:07,650 - app.services.data_service - INFO - Data inicializado com URL: https://app.arpcommerce.com.br/sells?r=2025-10-08
+2025-10-08 18:20:07,651 - app.services.data_service - INFO - Fazendo requisição GET para https://app.arpcommerce.com.br/sells?r=2025-10-08
+2025-10-08 18:22:22,594 - app.services.data_service - ERROR - Erro ao fazer requisição para https://app.arpcommerce.com.br/sells?r=2025-10-08: HTTPSConnectionPool(host='app.arpcommerce.com.br', port=443): Max retries exceeded with url: /sells?r=2025-10-08 (Caused by ConnectTimeoutError(<urllib3.connection.HTTPSConnection object at 0x783bfdae88c0>, 'Connection to app.arpcommerce.com.br timed out. (connect timeout=None)'))
+Traceback (most recent call last):
+  File "/home/codespace/.local/lib/python3.12/site-packages/urllib3/connection.py", line 198, in _new_conn
+    sock = connection.create_connection(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/codespace/.local/lib/python3.12/site-packages/urllib3/util/connection.py", line 85, in create_connection
+    raise err
+  File "/home/codespace/.local/lib/python3.12/site-packages/urllib3/util/connection.py", line 73, in create_connection
+    sock.connect(sa)
+TimeoutError: [Errno 110] Connection timed out
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/codespace/.local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 787, in urlopen
+    response = self._make_request(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/home/codespace/.local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 488, in _make_request
+    raise new_e
+  File "/home/codespace/.local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 464, in _make_request
+    self._validate_conn(conn)
+  File "/home/codespace/.local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 1093, in _validate_conn
+    conn.connect()
+  File "/home/codespace/.local/lib/python3.12/site-packages/urllib3/connection.py", line 753, in connect
+    self.sock = sock = self._new_conn()
+                       ^^^^^^^^^^^^^^^^
+  File "/home/codespace/.local/lib/python3.12/site-packages/urllib3/connection.py", line 207, in _new_conn
+    raise ConnectTimeoutError(
+urllib3.exceptions.ConnectTimeoutError: (<urllib3.connection.HTTPSConnection object at 0x783bfdae88c0>, 'Connection to app.arpcommerce.com.br timed out. (connect timeout=None)')
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/codespace/.local/lib/python3.12/site-packages/requests/adapters.py", line 644, in send
+    resp = conn.urlopen(
+           ^^^^^^^^^^^^^
+  File "/home/codespace/.local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 841, in urlopen
+    retries = retries.increment(
+              ^^^^^^^^^^^^^^^^^^
+  File "/home/codespace/.local/lib/python3.12/site-packages/urllib3/util/retry.py", line 519, in increment
+    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+urllib3.exceptions.MaxRetryError: HTTPSConnectionPool(host='app.arpcommerce.com.br', port=443): Max retries exceeded with url: /sells?r=2025-10-08 (Caused by ConnectTimeoutError(<urllib3.connection.HTTPSConnection object at 0x783bfdae88c0>, 'Connection to app.arpcommerce.com.br timed out. (connect timeout=None)'))
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/workspaces/ARPsys/app/services/data_service.py", line 24, in get_data
+    response = requests.get(self.url, cookies=self.cookies)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/codespace/.local/lib/python3.12/site-packages/requests/api.py", line 73, in get
+    return request("get", url, params=params, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/codespace/.local/lib/python3.12/site-packages/requests/api.py", line 59, in request
+    return session.request(method=method, url=url, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/codespace/.local/lib/python3.12/site-packages/requests/sessions.py", line 589, in request
+    resp = self.send(prep, **send_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/codespace/.local/lib/python3.12/site-packages/requests/sessions.py", line 703, in send
+    r = adapter.send(request, **kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/codespace/.local/lib/python3.12/site-packages/requests/adapters.py", line 665, in send
+    raise ConnectTimeout(e, request=request)
+requests.exceptions.ConnectTimeout: HTTPSConnectionPool(host='app.arpcommerce.com.br', port=443): Max retries exceeded with url: /sells?r=2025-10-08 (Caused by ConnectTimeoutError(<urllib3.connection.HTTPSConnection object at 0x783bfdae88c0>, 'Connection to app.arpcommerce.com.br timed out. (connect timeout=None)'))
+2025-10-08 18:22:22,604 - app.background_tasks.periodic_report_task - ERROR - Failed to update orders from external API: Failed to fetch data from https://app.arpcommerce.com.br/sells?r=2025-10-08: HTTPSConnectionPool(host='app.arpcommerce.com.br', port=443): Max retries exceeded with url: /sells?r=2025-10-08 (Caused by ConnectTimeoutError(<urllib3.connection.HTTPSConnection object at 0x783bfdae88c0>, 'Connection to app.arpcommerce.com.br timed out. (connect timeout=None)'))
+2025-10-08 18:22:22,604 - app.services.report_service - INFO - Calculando relatório diário para 2025-10-08
+2025-10-08 18:22:22,606 - app.services.report_service - INFO - Nenhum pedido encontrado para o relatório diário
+2025-10-08 18:22:22,606 - app.background_tasks.periodic_report_task - WARNING - Daily report could not be calculated (no data or error). No broadcast.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+2025-10-08 18:26:31,456 - app.app_factory - INFO - Encerrando aplicação FastAPI
+2025-10-08 18:26:31,457 - app.background_tasks.periodic_report_task - INFO - Tarefa de atualização periódica cancelada.
+ERROR:    Traceback (most recent call last):
+  File "/home/codespace/.local/lib/python3.12/site-packages/starlette/datastructures.py", line 686, in __getattr__
+    return self._state[key]
+           ~~~~~~~~~~~^^^^^
+KeyError: 'database_service'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/codespace/.local/lib/python3.12/site-packages/starlette/routing.py", line 694, in lifespan
+    async with self.lifespan_context(app) as maybe_state:
+  File "/usr/local/python/3.12.1/lib/python3.12/contextlib.py", line 217, in __aexit__
+    await anext(self.gen)
+  File "/home/codespace/.local/lib/python3.12/site-packages/fastapi/routing.py", line 209, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+  File "/usr/local/python/3.12.1/lib/python3.12/contextlib.py", line 217, in __aexit__
+    await anext(self.gen)
+  File "/home/codespace/.local/lib/python3.12/site-packages/fastapi/routing.py", line 209, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+  File "/usr/local/python/3.12.1/lib/python3.12/contextlib.py", line 217, in __aexit__
+    await anext(self.gen)
+  File "/home/codespace/.local/lib/python3.12/site-packages/fastapi/routing.py", line 209, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+  File "/usr/local/python/3.12.1/lib/python3.12/contextlib.py", line 217, in __aexit__
+    await anext(self.gen)
+  File "/home/codespace/.local/lib/python3.12/site-packages/fastapi/routing.py", line 209, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+  File "/usr/local/python/3.12.1/lib/python3.12/contextlib.py", line 217, in __aexit__
+    await anext(self.gen)
+  File "/home/codespace/.local/lib/python3.12/site-packages/fastapi/routing.py", line 209, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+  File "/usr/local/python/3.12.1/lib/python3.12/contextlib.py", line 217, in __aexit__
+    await anext(self.gen)
+  File "/home/codespace/.local/lib/python3.12/site-packages/fastapi/routing.py", line 209, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+  File "/usr/local/python/3.12.1/lib/python3.12/contextlib.py", line 217, in __aexit__
+    await anext(self.gen)
+  File "/workspaces/ARPsys/app/app_factory.py", line 88, in lifespan
+    app.state.database_service.close()
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/codespace/.local/lib/python3.12/site-packages/starlette/datastructures.py", line 689, in __getattr__
+    raise AttributeError(message.format(self.__class__.__name__, key))
+AttributeError: 'State' object has no attribute 'database_service'
+
+ERROR:    Application shutdown failed. Exiting.
+INFO:     Finished server process [52489]
