@@ -23,7 +23,16 @@ def listar_orders(
         db = database
         assert db.conn is not None
         cursor = db.conn.cursor()
-        cursor.execute("SELECT * FROM orders WHERE user_id = ?", (current_user.id,))
+        query = """
+            SELECT
+                o.*,
+                COALESCE(sn.nicho, '') as nicho
+            FROM orders o
+            LEFT JOIN sku_nichos sn ON o.sku = sn.sku AND sn.user_id = o.user_id
+            WHERE o.user_id = ?
+            ORDER BY o.payment_date DESC
+        """
+        cursor.execute(query, (current_user.id,))
         linhas = cursor.fetchall()
         colunas = [desc[0] for desc in cursor.description]
 
@@ -61,14 +70,21 @@ def listar_orders_periodo(
         assert db.conn is not None
         cursor = db.conn.cursor()
         query = """
-            SELECT * FROM orders
-            WHERE date(payment_date) BETWEEN ? AND ? AND user_id = ?
+            SELECT
+                o.*,
+                COALESCE(sn.nicho, '') as nicho
+            FROM orders o
+            LEFT JOIN sku_nichos sn ON o.sku = sn.sku AND sn.user_id = o.user_id
+            WHERE date(o.payment_date) BETWEEN ? AND ? AND o.user_id = ?
+            ORDER BY o.payment_date DESC
         """
         cursor.execute(query, (data_inicio, data_fim, current_user.id))
         linhas = cursor.fetchall()
         colunas = [desc[0] for desc in cursor.description]
 
         df = pd.DataFrame(linhas, columns=colunas)
+        df["data"] = pd.to_datetime(df["payment_date"], errors="coerce")
+        df["hour"] = df["data"].dt.hour if not df.empty and "data" in df.columns else 0
         df = df.fillna(0).replace({pd.NA: 0}).astype(object)
 
         logger.info(f"{len(df)} pedidos encontrados no período")

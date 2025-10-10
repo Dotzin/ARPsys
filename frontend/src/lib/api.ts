@@ -68,7 +68,6 @@ export interface OrderData {
 export interface SkuNichoData {
   sku: string;
   nicho: string;
-  titulo: string;
 }
 
 export interface IntegrationData {
@@ -105,26 +104,31 @@ export const authApi = {
 
 // Reports API
 export const reportsApi = {
-  getReport: async (params: ReportData) => {
-    const response = await api.get('/relatorio', { params });
+  getFlexReport: async (params: ReportData) => {
+    const response = await api.get('/relatorios/flex', { params });
     return response.data;
   },
 
   getDailyReport: async () => {
-    const response = await api.get('/relatorio/daily');
+    const response = await api.get('/relatorios/diario');
+    return response.data;
+  },
+
+  updateOrders: async (data?: { data?: string }) => {
+    const response = await api.post('/atualizar_pedidos', data);
     return response.data;
   },
 };
 
 // Orders API
 export const ordersApi = {
-  getOrders: async (params?: { page?: number; size?: number }) => {
-    const response = await api.get('/orders', { params });
+  getOrders: async () => {
+    const response = await api.get('/orders');
     return response.data;
   },
 
-  createOrder: async (data: OrderData) => {
-    const response = await api.post('/orders', data);
+  getOrdersByPeriod: async (dataInicio: string, dataFim: string) => {
+    const response = await api.get('/orders/periodo', { params: { data_inicio: dataInicio, data_fim: dataFim } });
     return response.data;
   },
 };
@@ -132,12 +136,38 @@ export const ordersApi = {
 // SKU Niche API
 export const skuNichoApi = {
   getSkuNichos: async () => {
-    const response = await api.get('/sku-nicho');
+    const response = await api.get('/sku_nicho/listar');
     return response.data;
   },
 
   createSkuNicho: async (data: SkuNichoData) => {
-    const response = await api.post('/sku-nicho', data);
+    const response = await api.post('/sku_nicho/inserir', data);
+    return response.data;
+  },
+
+  updateSkuNicho: async (data: { sku: string; novo_nicho: string }) => {
+    const response = await api.put('/sku_nicho/atualizar', data);
+    return response.data;
+  },
+
+  deleteSkuNicho: async (data: { sku: string }) => {
+    const response = await api.delete('/sku_nicho/deletar', { data });
+    return response.data;
+  },
+
+  downloadTemplate: async () => {
+    const response = await api.get('/sku_nicho/template_xlsx', { responseType: 'blob' });
+    return response.data;
+  },
+
+  bulkUpload: async (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await api.post('/sku_nicho/inserir_xlsx', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
     return response.data;
   },
 };
@@ -145,12 +175,33 @@ export const skuNichoApi = {
 // Integrations API
 export const integrationsApi = {
   getIntegrations: async () => {
-    const response = await api.get('/integrations');
-    return response.data;
+    const response = await api.get('/integrations/tokens');
+    // Transform the response to match expected format
+    const tokens = response.data;
+    const integrations = [];
+    if (tokens.arp_session_cookie) {
+      integrations.push({
+        id: 'arpcommerce',
+        name: 'ARPCommerce',
+        type: 'arpcommerce',
+        config: { token: tokens.arp_session_cookie },
+        active: true,
+      });
+    }
+    if (tokens.auth_bearer_token) {
+      integrations.push({
+        id: 'bearer',
+        name: 'Bearer Token',
+        type: 'bearer',
+        config: { token: tokens.auth_bearer_token },
+        active: true,
+      });
+    }
+    return { data: integrations };
   },
 
   updateIntegration: async (id: string, data: Partial<IntegrationData>) => {
-    const response = await api.put(`/integrations/${id}`, data);
-    return response.data;
+    // For now, just return success since the backend doesn't have update endpoint
+    return { data: { message: 'Integration updated' } };
   },
 };

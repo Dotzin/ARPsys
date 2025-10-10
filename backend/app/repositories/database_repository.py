@@ -21,14 +21,12 @@ class Database(metaclass=SingletonMeta):
     def __init__(self, db_path: str):
         self.db_path = db_path
         self.conn: Optional[sqlite3.Connection] = None
-        self._cursor: Optional[sqlite3.Cursor] = None
         self.logger = logging.getLogger(__name__)
         self.logger.info(f"Database inicializado com o caminho: {self.db_path}")
 
     def connect(self):
         try:
             self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
-            self._cursor = self.conn.cursor()
             self.logger.info("Conexão com o banco de dados estabelecida")
         except sqlite3.Error as e:
             self.logger.exception(f"Erro ao conectar ao banco de dados: {e}")
@@ -38,11 +36,7 @@ class Database(metaclass=SingletonMeta):
     def cursor(self):
         if self.conn is None:
             self.connect()
-        return self._cursor
-
-    @cursor.setter
-    def cursor(self, value):
-        self._cursor = value
+        return self.conn.cursor()
 
     def commit(self):
         try:
@@ -59,7 +53,6 @@ class Database(metaclass=SingletonMeta):
             if self.conn:
                 self.conn.close()
                 self.conn = None
-                self.cursor = None
                 self.logger.info("Conexão com o banco de dados fechada")
         except sqlite3.Error as e:
             self.logger.exception(f"Erro ao fechar conexão com o banco de dados: {e}")
@@ -67,8 +60,9 @@ class Database(metaclass=SingletonMeta):
 
     def get_all_user_ids(self):
         try:
-            self.cursor.execute("SELECT id FROM users")
-            user_ids = [row[0] for row in self.cursor.fetchall()]
+            cursor = self.cursor
+            cursor.execute("SELECT id FROM users")
+            user_ids = [row[0] for row in cursor.fetchall()]
             self.logger.info(f"Recuperados {len(user_ids)} IDs de usuários: {user_ids}")
             return user_ids
         except sqlite3.Error as e:
@@ -178,18 +172,22 @@ class TableCreator:
     def add_user_id_to_tables(self):
         try:
             # Add user_id column to orders table if it doesn't exist
-            self.database.cursor.execute("PRAGMA table_info(orders)")
-            columns = [col[1] for col in self.database.cursor.fetchall()]
+            cursor = self.database.cursor
+            cursor.execute("PRAGMA table_info(orders)")
+            columns = [col[1] for col in cursor.fetchall()]
             if 'user_id' not in columns:
-                self.database.cursor.execute("ALTER TABLE orders ADD COLUMN user_id INTEGER")
+                cursor.execute("ALTER TABLE orders ADD COLUMN user_id INTEGER")
                 self.logger.info("Coluna user_id adicionada à tabela orders")
 
             # Add user_id column to sku_nichos table if it doesn't exist
-            self.database.cursor.execute("PRAGMA table_info(sku_nichos)")
-            columns = [col[1] for col in self.database.cursor.fetchall()]
+            cursor = self.database.cursor
+            cursor.execute("PRAGMA table_info(sku_nichos)")
+            columns = [col[1] for col in cursor.fetchall()]
             if 'user_id' not in columns:
-                self.database.cursor.execute("ALTER TABLE sku_nichos ADD COLUMN user_id INTEGER")
+                cursor.execute("ALTER TABLE sku_nichos ADD COLUMN user_id INTEGER")
                 self.logger.info("Coluna user_id adicionada à tabela sku_nichos")
+
+
 
             self.database.commit()
             self.logger.info("Colunas user_id adicionadas/verificada nas tabelas")

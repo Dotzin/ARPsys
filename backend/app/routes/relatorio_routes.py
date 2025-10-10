@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 from datetime import datetime, timedelta
 import asyncio
+from typing import Optional
 from app.services.data_service import Data
 from app.services.data_parser_service import DataParser
 from app.services.order_service import OrderInserter
@@ -107,16 +108,30 @@ async def atualizar_pedidos(
 
 
 # RELATÓRIO FLEX (ML + KPIs + Rankings)
-@router.get("/relatorio_flex")
+@router.get("/flex")
 def relatorio_flex(
     query: ReportQuery = Depends(),
     current_user: User = Depends(get_current_active_user),
     report_service: ReportService = Depends(lambda: container.report_service()),
 ):
     try:
-        return report_service.generate_relatorio_flex(query.data_inicio, query.data_fim, current_user.id)
+        report = report_service.generate_relatorio_flex(query.data_inicio, query.data_fim, current_user.id)
+        return {"status": "sucesso", "dados": report}
     except ValueError as e:
         return JSONResponse(status_code=400, content={"erro": str(e)})
     except Exception as e:
         logger.exception("Erro ao gerar relatório flex")
+        return JSONResponse(status_code=500, content={"erro": str(e)})
+
+# RELATÓRIO DIÁRIO
+@router.get("/diario")
+def relatorio_diario(
+    current_user: User = Depends(get_current_active_user),
+    report_service: ReportService = Depends(lambda: container.report_service()),
+):
+    try:
+        report = report_service.get_daily_report_data(current_user.id)
+        return report
+    except Exception as e:
+        logger.exception("Erro ao gerar relatório diário")
         return JSONResponse(status_code=500, content={"erro": str(e)})

@@ -1,40 +1,21 @@
-# Task: Complete Separation of Front/Back - Remove All Frontend Code from Backend
+# Task: Fix API errors, CORS, WebSocket issues, and add sale hour to orders
 
-## Steps to Complete
+## Plan Breakdown
 
-### 1. Backend Cleanup
-- [x] Remove static file serving routes from auth_routes.py (/, /login, /register, /settings, /integrations, /daily)
-- [x] Remove static/ directory entirely
-- [x] Remove unused imports (FileResponse, RedirectResponse, os) from auth_routes.py
-- [x] Update app_factory.py comment to remove reference to static files
-- [ ] Verify no other frontend-related code remains in backend
+### 1. Fix SQLite query in report_service.py
+- [x] Change BETWEEN to >= and <= in _fetch_data_from_db to avoid InterfaceError
 
-### 2. Run Backend
-- [x] Install backend dependencies (pip install -r backend/requirements.txt)
-- [x] Run backend server (uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000)
+### 2. Add sale hour to orders list
+- [x] Include "hour" field in pedidos_lista in generate_relatorio_flex
 
-### 3. Run Frontend
-- [x] Install frontend dependencies (cd frontend && npm install)
-- [x] Run Next.js dev server (cd frontend && npm run dev)
+### 3. Update CORS configuration
+- [x] Set allow_origins to ["*"] in app_factory.py for broader access
 
-### 4. Test Functionality
-- [x] Open browser to http://localhost:3000 (compiled successfully, GET / 200)
-- [ ] Test login page
-- [ ] Test registration
-- [ ] Test dashboard access
-- [ ] Test reports and data fetching
-- [ ] Test WebSocket connections
-- [ ] Test integrations page
+### 4. Add logging to WebSocket
+- [x] Enhance logging in websocket_endpoint for connection debugging
 
-### 5. Ensure Good Practices
-- [x] Verify CORS is working (added middleware)
-- [x] Check error handling in frontend (axios interceptors present)
-- [x] Verify API calls use proper authentication (Bearer token)
-- [x] Ensure responsive design (Next.js with Tailwind)
-- [ ] Check for any console errors (can't check without browser)
-- [ ] Test with different browsers (can't test)
-
-### 6. Final Verification
-- [ ] Run backend tests (PYTHONPATH issue, but servers running)
-- [ ] Run frontend lint (cd frontend && npm run lint)
-- [ ] Confirm separation: backend only serves API, frontend handles UI
+### 5. Followup: Restart and Test
+- [ ] Restart the backend server (e.g., run `uvicorn app.main:app --reload` in backend directory)
+- [ ] Test /relatorios/diario and /relatorios/flex endpoints (should return 200 without errors)
+- [ ] Verify WebSocket connections in frontend dashboard (no disconnections, logs show successful connects)
+- [ ] Check orders display includes sale hour in reports/orders page

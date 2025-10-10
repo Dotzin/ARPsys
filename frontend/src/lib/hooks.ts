@@ -55,7 +55,7 @@ export const useRegister = () => {
 export const useReports = (params: ReportData, enabled = false) => {
   return useQuery({
     queryKey: ['reports', params],
-    queryFn: () => reportsApi.getReport(params),
+    queryFn: () => reportsApi.getFlexReport(params),
     enabled,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
@@ -70,26 +70,20 @@ export const useDailyReport = () => {
 };
 
 // Orders hooks
-export const useOrders = (params?: { page?: number; size?: number }) => {
+export const useOrders = () => {
   return useQuery({
-    queryKey: ['orders', params],
-    queryFn: () => ordersApi.getOrders(params),
+    queryKey: ['orders'],
+    queryFn: () => ordersApi.getOrders(),
     staleTime: 2 * 60 * 1000, // 2 minutes
   });
 };
 
-export const useCreateOrder = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (data: OrderData) => ordersApi.createOrder(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['orders'] });
-      toast.success('Pedido criado com sucesso!');
-    },
-    onError: (error: ApiError) => {
-      toast.error(error.response?.data?.detail || 'Erro ao criar pedido');
-    },
+export const useOrdersByPeriod = (dataInicio: string, dataFim: string, enabled = false) => {
+  return useQuery({
+    queryKey: ['orders', dataInicio, dataFim],
+    queryFn: () => ordersApi.getOrdersByPeriod(dataInicio, dataFim),
+    enabled,
+    staleTime: 2 * 60 * 1000, // 2 minutes
   });
 };
 

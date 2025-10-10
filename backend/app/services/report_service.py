@@ -2,8 +2,9 @@ import logging
 from typing import Dict, Any, List, Tuple, Optional
 from datetime import datetime
 import pandas as pd
+import pytz
 from app.repositories.database_repository import Database
-from app.services.ml_service import predict_sales_for_df
+
 from app.config.constants import (
     TOP_NICHOS_LIMIT,
     TOP_SKUS_LIMIT,
@@ -23,7 +24,8 @@ class ReportService:
 
     def get_daily_report_data(self, user_id: int = 1) -> Optional[Dict[str, Any]]:
         """Calcula e retorna apenas o relatório do dia atual."""
-        hoje = datetime.today().strftime("%Y-%m-%d")
+        sao_paulo = pytz.timezone('America/Sao_Paulo')
+        hoje = datetime.now(pytz.utc).astimezone(sao_paulo).strftime("%Y-%m-%d")
         self.logger.info(f"Calculando relatório diário para {hoje}")
 
         try:
@@ -41,11 +43,33 @@ class ReportService:
                 self.logger.info("Nenhum pedido encontrado para o relatório diário")
                 return {"dia": hoje, "status": "sem_dados", "kpis_diarios": {}}
 
+            # Add date fields
+            df["data"] = pd.to_datetime(df["payment_date"], errors="coerce")
+            if not df.empty and "data" in df.columns:
+                df["hour"] = df["data"].dt.hour
+                df["weekday"] = df["data"].dt.weekday
+                df["month"] = df["data"].dt.month
+                df["payment_date_brt"] = df["payment_date"]
+            else:
+                df["hour"] = 0
+                df["weekday"] = 0
+                df["month"] = 0
+                df["payment_date_brt"] = df["payment_date"]
+
             # Generate KPIs for the current day
             kpis_diarios = self._calculate_daily_kpis(df)
 
             # Analysis by niche for the day
             por_nicho_dia = self._calculate_niche_analysis(df)
+
+            # Analysis by SKU for the day
+            por_sku_dia = (
+                df.groupby(["sku", "nicho"])
+                .agg({"profit": "sum", "total_value": "sum", "order_id": "count", "quantity": "sum"})
+                .reset_index()
+                .rename(columns={"profit": "lucro_liquido", "total_value": "faturamento_total", "order_id": "total_pedidos", "quantity": "total_unidades"})
+            )
+            por_sku_dia = self._clean_df_for_json(por_sku_dia)
 
             # Daily rankings
             rankings_diarios = self._calculate_daily_rankings(df, por_nicho_dia)
@@ -53,7 +77,7 @@ class ReportService:
             # Última venda
             ultima_venda_df = df.sort_values("payment_date", ascending=False).head(1)[
                 [
-                    "payment_date",
+                    "payment_date_brt",
                     "order_id",
                     "cart_id",
                     "sku",
@@ -63,7 +87,7 @@ class ReportService:
                     "profit",
                     "nicho",
                 ]
-            ]
+            ].rename(columns={"payment_date_brt": "payment_date"})
             ultima_venda = (
                 ultima_venda_df.to_dict(orient="records")[0]
                 if not ultima_venda_df.empty
@@ -103,7 +127,7 @@ class ReportService:
                 df.sort_values("payment_date", ascending=False)
                 .head(LAST_SALES_LIMIT)[
                     [
-                        "payment_date",
+                        "payment_date_brt",
                         "order_id",
                         "cart_id",
                         "sku",
@@ -114,13 +138,14 @@ class ReportService:
                         "nicho",
                     ]
                 ]
+                .rename(columns={"payment_date_brt": "payment_date"})
                 .to_dict(orient="records")
             )
 
             # Vendas negativas
             vendas_negativas = df[df["profit"] < 0][
                 [
-                    "payment_date",
+                    "payment_date_brt",
                     "order_id",
                     "cart_id",
                     "sku",
@@ -130,13 +155,30 @@ class ReportService:
                     "profit",
                     "nicho",
                 ]
-            ].to_dict(orient="records")
+            ].rename(columns={"payment_date_brt": "payment_date"}).to_dict(orient="records")
+
+            # Por hora
+            por_hora = (
+                df.groupby("hour")
+                .agg({"profit": "sum", "total_value": "sum", "order_id": "count"})
+                .reset_index()
+                .rename(
+                    columns={
+                        "profit": "lucro_liquido",
+                        "total_value": "faturamento",
+                        "order_id": "total_pedidos",
+                    }
+                )
+            )
+            por_hora = self._clean_df_for_json(por_hora)
 
             relatorio_final = {
                 "dia": hoje,
                 "status": "sucesso",
                 "kpis_diarios": kpis_diarios,
                 "analise_por_nicho_dia": por_nicho_dia.to_dict(orient="records"),
+                "por_sku_dia": por_sku_dia.to_dict(orient="records"),
+                "por_hora": por_hora.to_dict(orient="records"),
                 "rankings_diarios": rankings_diarios,
                 "timestamp_atualizacao": datetime.now().isoformat(),
                 "ultima_venda": ultima_venda,
@@ -155,15 +197,28 @@ class ReportService:
     def _calculate_daily_kpis(self, df: pd.DataFrame) -> Dict[str, Any]:
         """Calculate daily KPIs from the dataframe."""
         total_pedidos = len(df)
-        total_unidades = int(df["quantity"].sum())
-        faturamento = float(df["total_value"].sum())
-        lucro_liquido = float(df["profit"].sum())
+        total_unidades = int(df["quantity"].fillna(0).sum())
+        faturamento = float(df["total_value"].fillna(0).sum())
+        lucro_liquido = float(df["profit"].fillna(0).sum())
+
+        ticket_medio = {
+            "pedido": faturamento / total_pedidos if total_pedidos > 0 else 0,
+            "unidade": faturamento / total_unidades if total_unidades > 0 else 0,
+        }
+
+        custos = {
+            "custo_total": float(df["cost"].fillna(0).sum()) if not df.empty else 0,
+            "frete_total": float(df["freight"].fillna(0).sum()) if not df.empty else 0,
+            "impostos_total": float(df["taxes"].fillna(0).sum()) if not df.empty else 0,
+        }
 
         return {
             "lucro_liquido": lucro_liquido,
             "faturamento": faturamento,
             "total_pedidos": total_pedidos,
             "total_unidades": total_unidades,
+            "ticket_medio": ticket_medio,
+            "custos": custos,
         }
 
     def _calculate_niche_analysis(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -207,10 +262,20 @@ class ReportService:
             .rename(columns={"profit": "lucro_liquido", "gross_profit": "lucro_bruto"})
             .to_dict(orient="records")
         )
+        top_ads_dia = (
+            df.groupby("ad")
+            .agg({"profit": "sum", "gross_profit": "sum"})
+            .sort_values("profit", ascending=False)
+            .head(TOP_ADS_LIMIT)
+            .reset_index()
+            .rename(columns={"profit": "lucro_liquido", "gross_profit": "lucro_bruto"})
+            .to_dict(orient="records")
+        )
 
         return {
             "top_nichos": top_nichos_dia,
             "top_skus": top_skus_dia,
+            "top_ads": top_ads_dia,
         }
 
     def _validate_dates(
@@ -236,7 +301,7 @@ class ReportService:
             SELECT o.*, n.nicho
             FROM orders o
             LEFT JOIN sku_nichos n ON o.sku = n.sku AND o.user_id = n.user_id
-            WHERE date(o.payment_date) BETWEEN ? AND ? AND o.user_id = ?
+            WHERE date(o.payment_date) >= ? AND date(o.payment_date) <= ? AND o.user_id = ?
         """
         linhas = cursor.execute(
             query, (start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d"), user_id)
@@ -272,7 +337,7 @@ class ReportService:
     def generate_relatorio_flex(
         self, data_inicio: Optional[str] = None, data_fim: Optional[str] = None, user_id: int = 1
     ) -> Dict[str, Any]:
-        """Gera o relatório flexível com KPIs, relatórios diários, análises por nicho/SKU, forecast e rankings."""
+        """Gera o relatório flexível com KPIs, relatórios diários, análises por nicho/SKU e rankings."""
         self.logger.info(
             f"Gerando relatório flex com data_inicio={data_inicio}, data_fim={data_fim}"
         )
@@ -310,19 +375,21 @@ class ReportService:
                     "frete_total": float(df["freight"].sum()),
                     "impostos_total": float(df["taxes"].sum()),
                 },
-                "indices": {
-                    "rentabilidade_media": float(
-                        df["rentability"].fillna(0).mean()
-                        if not df["rentability"].isna().all()
-                        else 0
-                    ),
-                    "profitabilidade_media": float(
-                        df["profitability"].fillna(0).mean()
-                        if not df["profitability"].isna().all()
-                        else 0
-                    ),
-                },
                 "skus_sem_nicho": skus_sem_nicho,
+            }
+
+            # Add indices after kpis_gerais is defined
+            kpis_gerais["indices"] = {
+                "rentabilidade_media": float(
+                    (kpis_gerais["lucro_liquido_total"] / kpis_gerais["faturamento_total"]) * 100
+                    if kpis_gerais["faturamento_total"] > 0
+                    else 0
+                ),
+                "profitabilidade_media": float(
+                    df["profitability"].fillna(0).mean()
+                    if not df["profitability"].isna().all()
+                    else 0
+                ),
             }
 
             self.logger.info(
@@ -505,6 +572,7 @@ class ReportService:
                     "total_value",
                     "profit",
                     "nicho",
+                    "hour",
                 ]
             ].to_dict(orient="records")
 
@@ -512,13 +580,7 @@ class ReportService:
                 f"Lista de pedidos gerada com {len(pedidos_lista)} entradas"
             )
 
-            # ================================
-            # 5️⃣ FORECAST (ML)
-            # ================================
-            df_forecast, conclusoes = predict_sales_for_df(df)
-            df_forecast = self._clean_df_for_json(df_forecast)
 
-            self.logger.info("Forecast ML executado com sucesso")
 
             # ================================
             # 6️⃣ RANKINGS
@@ -580,10 +642,6 @@ class ReportService:
                     "top_skus": top_skus.to_dict(orient="records"),
                     "top_por_nicho": top_por_nicho.to_dict(orient="records"),
                     "top_skus_per_nicho": top_skus_per_nicho,
-                },
-                "forecast": {
-                    "dados": df_forecast.to_dict(orient="records"),
-                    "conclusoes": conclusoes,
                 },
             }
 

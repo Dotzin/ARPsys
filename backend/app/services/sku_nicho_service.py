@@ -62,7 +62,7 @@ class SkuNichoInserter:
     def list_all(self, user_id: int = 1):
         try:
             self.logger.info(f"Listando todos os SKUs para user {user_id}")
-            self.db.cursor.execute("SELECT sku, nicho, created_at FROM sku_nichos WHERE user_id = ?", (user_id,))
+            self.db.cursor.execute("SELECT sku, nicho FROM sku_nichos WHERE user_id = ?", (user_id,))
             rows = self.db.cursor.fetchall()
             self.logger.info(f"{len(rows)} registros retornados")
             return rows

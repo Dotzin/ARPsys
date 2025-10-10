@@ -106,7 +106,7 @@ def create_app() -> FastAPI:
     # Add CORS middleware
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["https://refactored-disco-qwjwpq775v93xvv9-3000.app.github.dev"],
+        allow_origins=["*"],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -148,11 +148,11 @@ def create_app() -> FastAPI:
 
     # Include routers
     app.include_router(auth_router, prefix="/auth", tags=["authentication"])
-    app.include_router(relatorio_router)
+    app.include_router(relatorio_router, prefix="/relatorios")
     app.include_router(orders_router)
     app.include_router(sku_nicho_router)
-    app.include_router(websocket_router)
     app.include_router(integrations_router, prefix="/integrations", tags=["integrations"])
+    app.include_router(websocket_router)
 
     logger.info("App criado e configurado com sucesso")
     return app
